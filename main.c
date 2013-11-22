@@ -243,7 +243,26 @@ elemento* getHarmonic(elemento *fonte,int index) {
 		}
 		return ret;
 	} else if (strcmp(fonte->tipo,"PULSE") == 0) {
-
+		double tOff = fonte->param6 - fonte->param5 - fonte->param3 - fonte->param4;
+		if (index == 0) {
+			ret->valor = 1/fonte->param6 * (fonte->valor * tOff + (fonte->valor - fonte->param1)*(fonte->param3 + 2*tOff)/2 + fonte->valor*fonte->param3 - tOff*(fonte->param1 - fonte->valor) + fonte->param1*fonte->param5 + (fonte->valor + fonte->param1)*fonte->param4/2);
+			strcpy(ret->tipo,"DC");
+			return ret;
+		} else {
+			double c1 = (fonte->param3) ? (fonte->param1 - fonte->valor) / fonte->param3 : 0;
+			double c2 = (fonte->param4) ? (fonte->valor - fonte->param1) / fonte->param4 : 0;
+			double k1 = (fonte->param3) ? fonte->valor - (fonte->param1 - fonte->valor) * tOff / fonte->param3 : fonte->valor;
+			double k2 = (fonte->param4) ? fonte->param1 - (fonte->valor - fonte->param1) * (fonte->param6 - fonte->param4) / fonte->param4 : fonte->param1;
+			ret->valor = fonte->valor / (M_PI * index) * sin(2 * M_PI * index * tOff / fonte->param6) +
+			                                        (c1 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (cos(2 * M_PI * index *(tOff + fonte->param3) / fonte->param6) - cos(2 * M_PI * index * tOff / fonte->param6)) +
+			                                        (tOff + fonte->param3) * sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - tOff * sin(2 * M_PI * index * tOff / fonte->param6)) +
+			                                        k1 / (M_PI * index) * (sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - sin(2 * M_PI * index * tOff / fonte->param6))) +
+			                                        fonte->param1 / (M_PI * index) * (sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6) - sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6)) +
+			                                        (c2 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (cos(2 * M_PI * index) - cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
+			                                        fonte->param6 * sin(2 * M_PI * index) - (fonte->param6 - fonte->param4) * sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
+			                                        k2 / (M_PI * index) * (sin(2 * M_PI * index) - sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)));
+			return ret;
+		}
 	} else {
 		// tipo de fonte nao identificado
 		free(ret);
@@ -356,17 +375,18 @@ int main(void)
 							,netlist[ne].param1,netlist[ne].param2,netlist[ne].param3,netlist[ne].param4,netlist[ne].param5,netlist[ne].param6);
 #endif
 				}
+
 				else if (strcmp(modelo,"PULSE")==0)
 				{
 					strcpy(netlist[ne].tipo,"PULSE");
-					netlist[ne].valor=atof(netlistParams[4]);
-					netlist[ne].param1=atof(netlistParams[5]);
-					netlist[ne].param2=atof(netlistParams[6]);
-					netlist[ne].param3=atof(netlistParams[7]);
-					netlist[ne].param4=atof(netlistParams[8]);
-					netlist[ne].param5=atof(netlistParams[9]);
-					netlist[ne].param6=atof(netlistParams[10]);
-					netlist[ne].param7=atof(netlistParams[11]);
+					netlist[ne].valor=atof(netlistParams[4]); // amp 1
+					netlist[ne].param1=atof(netlistParams[5]); // amp 2
+					netlist[ne].param2=atof(netlistParams[6]); // atraso
+					netlist[ne].param3=atof(netlistParams[7]); // tempo subida
+					netlist[ne].param4=atof(netlistParams[8]); // tempo descida
+					netlist[ne].param5=atof(netlistParams[9]); // tempo ligado
+					netlist[ne].param6=atof(netlistParams[10]); // periodoo
+					netlist[ne].param7=atof(netlistParams[11]); // nao utilizado
 #ifdef DEBUG
 					printf("%s %i %i %s(%g %g %g %g %g %g %g %g)\n",netlist[ne].nome,netlist[ne].a,netlist[ne].b,netlist[ne].tipo,netlist[ne].valor,netlist[ne].param1,netlist[ne].param2
 							,netlist[ne].param3,netlist[ne].param4,netlist[ne].param5,netlist[ne].param6,netlist[ne].param7);
@@ -684,7 +704,7 @@ int main(void)
 						} else if(strcmp(fonte->tipo,"SIN") == 0) {
 							Yn[fonte->x][nv+1] -= fonte->param1*cos(fonte->param6*M_PI/180) + I*fonte->param1*sin(fonte->param6*M_PI/180);
 						} else if (strcmp(fonte->tipo,"PULSE") == 0) {
-
+							Yn[fonte->x][nv+1] -= fonte->valor;
 						} else {
 #ifdef DEBUG
 							printf("TIPO DA FONTE NAO IDENTIFICADO\n");
@@ -719,9 +739,12 @@ int main(void)
 
 								if (fonte->param2 == 0)
 									fasor = creal(Yn[i][j]);
-								else
-									fasor = cabs(Yn[i][j])*sin(indiceHarmonicos*fonte->param2*2*M_PI*t + carg(Yn[i][j]));
-
+								else {
+									if (strcmp(fonte->tipo,"SIN") == 0)
+										fasor = cabs(Yn[i][j])*sin(indiceHarmonicos*fonte->param2*2*M_PI*t + carg(Yn[i][j]));
+									else if (strcmp(fonte->tipo,"PULSE") == 0)
+										fasor = cabs(Yn[i][j])*sin(indiceHarmonicos*(1/fonte->param6)*2*M_PI*t + carg(Yn[i][j]));
+								}
 								Yt[i][j] += fasor;
 #ifdef DEBUG
 								if (Yn[i][j]!=0)
