@@ -45,6 +45,7 @@ DC <valor>
 SIN <nivel contínuo> <amplitude> <frequência (Hz)> <atraso*> <atenuação*> <ângulo> <número de ciclos*>
  */
 
+// Debug deve ser definido durante a compilacao
 //#define DEBUG true
 #define versao "1.1 - 22/11/2013"
 #include <stdio.h>
