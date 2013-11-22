@@ -32,6 +32,7 @@ Os nos podem ser nomes
 /*
 Versão 1.1
 Resolve circuitos no estado permanente senoidal.
+Baseado no programa original fornecido pelo professor Antonio Carlos Moreirão.
 Por David E. de Britto Junior.
 
 Novos elementos aceitos no netlist:
@@ -42,7 +43,6 @@ Transformador: K<nome> <L1> <L2> <acoplamento>
 Fontes Independentes (Corrente ou tensão):
 DC <valor>
 SIN <nivel contínuo> <amplitude> <frequência (Hz)> <atraso*> <atenuação*> <ângulo> <número de ciclos*>
-
  */
 
 //#define DEBUG true
