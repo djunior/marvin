@@ -28,7 +28,7 @@ As fontes F e H tem o ramo de entrada em curto
 O amplificador operacional ideal tem a saida suspensa
 Os nos podem ser nomes
  */
-#define DEBUG true
+//#define DEBUG true
 #define versao "1.0h - 18/6/2011"
 #include <stdio.h>
 
@@ -51,7 +51,6 @@ Os nos podem ser nomes
 #define TOLG 1e-9
 #define ABERTO 1e9
 #define CURTO 1e-9
-#define USE_HARMONICS true
 
 
 typedef struct elemento { /* Elemento do netlist */
@@ -69,13 +68,14 @@ typedef struct elemento { /* Elemento do netlist */
 	int a,b,c,d,x,y,netlistIndex;
 } elemento;
 
-elemento netlist[MAX_ELEM], *fontes[MAX_ELEM]; /* Netlist */
+elemento netlist[MAX_ELEM], *fontes[MAX_ELEM], *indutores[MAX_ELEM]; /* Netlist */
 
 int
 ne, /* Elementos */
 nv, /* Variaveis */
 nn, /* Nos */
-indiceFontes;
+indiceFontes,
+indiceIndutores=0;
 
 unsigned maxHarmonicos=15;
 
@@ -107,11 +107,9 @@ double Yt[MAX_NOS+1][MAX_NOS+2];
 double complex g;
 double complex Yn[MAX_NOS+1][MAX_NOS+2];
 
-long unsigned contadorPassos =0 ;
-
 /* Resolucao de sistema de equacoes lineares.
 Metodo de Gauss-Jordan com condensacao pivotal */
-void resolversistema(void)
+int resolversistema(void)
 {
 	int i,j,l, a;
 	double complex t, p;
@@ -133,8 +131,10 @@ void resolversistema(void)
 			}
 		}
 		if (fabs(t)<TOLG) {
+#ifdef DEBUG
 			printf("Sistema singular\n");
-			exit(1);
+#endif
+			return 1;
 		}
 		for (j=nv+1; j>i; j--) {  /* Ponha j>0 em vez de j>i para melhor visualizacao */
 			Yn[i][j] /= t;
@@ -145,6 +145,7 @@ void resolversistema(void)
 			}
 		}
 	}
+	return 0;
 }
 
 /* Rotina que conta os nos e atribui numeros a eles */
@@ -172,57 +173,53 @@ int numero(char *nome)
 // Retorna o harmonico de numero index de uma fonte
 // retorna 0 se nao houver mais harmonicos
 elemento* getHarmonic(elemento *fonte,int index) {
-	printf("getHamonic: %p %i \n",fonte,index);
 	if (fonte == 0)
 		return 0;
-	printf("getHamonic: %p %i %s tipo=%s\n",fonte,index,(*fonte).nome,(*fonte).tipo);
+
 	// Esse elemento deve ser liberado no fim de cada analise de cada harmonico
 	// Caso essa funcao retorne 0, ela mesmo vai liberar o elemento criado.
 	elemento* ret = malloc(sizeof(elemento));
 	// Configurando valores iniciais
-	strcpy((*ret).nome,(*fonte).nome);
-	strcpy((*ret).tipo,(*fonte).tipo);
-	(*ret).a = (*fonte).a;
-	(*ret).b = (*fonte).b;
-	(*ret).c = (*fonte).c;
-	(*ret).d = (*fonte).d;
-	(*ret).netlistIndex = (*fonte).netlistIndex;
-	(*ret).x = (*fonte).x;
-	(*ret).y = (*fonte).y;
-	(*ret).valor = 0;
-	(*ret).param1 = 0;
-	(*ret).param2 = 0;
-	(*ret).param3 = 0;
-	(*ret).param5 = 0;
-	(*ret).param6 = (*fonte).param6;
-	(*ret).param7 = 0;
-	printf("Y U NO WORK %i %i\n",strcmp((*fonte).tipo,"DC"),index==0);
-	if (strcmp((*fonte).tipo,"DC") == 0){
+	strcpy(ret->nome,fonte->nome);
+	strcpy(ret->tipo,fonte->tipo);
+	ret->a = fonte->a;
+	ret->b = fonte->b;
+	ret->c = fonte->c;
+	ret->d = fonte->d;
+	ret->netlistIndex = fonte->netlistIndex;
+	ret->x = fonte->x;
+	ret->y = fonte->y;
+	ret->valor = 0;
+	ret->param1 = 0;
+	ret->param2 = 0;
+	ret->param3 = 0;
+	ret->param5 = 0;
+	ret->param6 = fonte->param6;
+	ret->param7 = 0;
+
+	if (strcmp(fonte->tipo,"DC") == 0){
 		if (index == 0){
-			printf("Atualizando valor do harmonico para %f\n",creal((*fonte).valor));
-			(*ret).valor = (*fonte).valor;
+			ret->valor = fonte->valor;
 			return ret;
 		}else {
 			free(ret);
 			return 0;
 		}
-	} else if (strcmp((*fonte).tipo,"SIN") == 0) {
+	} else if (strcmp(fonte->tipo,"SIN") == 0) {
 		if (index == 0) {
-			(*ret).valor = (*fonte).valor;
-			strcpy((*ret).tipo,"DC");
+			ret->valor = fonte->valor;
+			strcpy(ret->tipo,"DC");
 		} else if(index == 1) {
-			(*ret).param1 = (*fonte).param1;
-			(*ret).param2 = (*fonte).param2;
-			(*ret).param3 = (*fonte).param3;
-			(*ret).param4 = (*fonte).param4;
+			ret->param1 = fonte->param1;
+			ret->param2 = fonte->param2;
+			ret->param3 = fonte->param3;
+			ret->param4 = fonte->param4;
 		} else {
-			printf("LIBERANDO RET\n");
 			free(ret);
-			printf("RETORNANDO 0\n");
 			return 0;
 		}
 		return ret;
-	} else if (strcmp((*fonte).tipo,"PULSE") == 0) {
+	} else if (strcmp(fonte->tipo,"PULSE") == 0) {
 
 	} else {
 		// tipo de fonte nao identificado
@@ -265,40 +262,35 @@ int main(void)
 		tipo=txt[0];
 		//sscanf(txt,"%10s",netlist[ne].nome);
 		//p=txt+strlen(netlist[ne].nome); /* Inicio dos parametros */
-		printf("Linha atual: %s\n",txt);
-		printf("Tipo: %c\n",tipo);
 		/* O que e lido depende do tipo */
 		if (tipo=='*') { /* Comentario comeca com "*" */
 			printf("Comentario: %s",txt);
 			ne--;
 		}
 		else {
-			printf("Parseando linha\n");
 			indice=0;
 			token=strtok(txt," ()'\n'");
-			printf("TOKEN: %s\n",token);
 			while (token)
 			{
 				strcpy(netlistParams[indice],token);
-				printf("Indice: %i - netlistParams[%i] = %s\n",indice,indice,netlistParams[indice]);
 				token = strtok(NULL," ()'\n'");
-				printf("NEXT TOKEN: %s\n",token);
 				indice++;
 			}
 			strcpy(netlist[ne].nome,netlistParams[0]);
-			printf("Nome: %s\n",netlist[ne].nome);
+#ifdef DEBUG
+			printf("Elemento %s valores: ",netlist[ne].nome);
+#endif
 			// Esse tipo sera substituido em fontes V e I pelo tipo da fonte (DC, SIN, PULSE).
 			// No restante dos casos, o tipo sera o identificador do elemento, como R, L, C, G, ...
 			netlist[ne].tipo[0] = tipo;
 			netlist[ne].netlistIndex = ne;
 			if (tipo=='R') {
-				printf("Tipo == R\n");
 				netlist[ne].a=numero(netlistParams[1]);
-				printf("A: %i\n",netlist[ne].a);
 				netlist[ne].b=numero(netlistParams[2]);
-				printf("B: %i\n",netlist[ne].b);
 				netlist[ne].valor=atof(netlistParams[3]);
+#ifdef DEBUG
 				printf("%s %i %i %g\n",netlist[ne].nome,netlist[ne].a,netlist[ne].b,creal(netlist[ne].valor));
+#endif
 			}
 			else if (tipo=='I' || tipo == 'V'){
 				if (indice<4) {
@@ -317,7 +309,9 @@ int main(void)
 				{
 					strcpy(netlist[ne].tipo,"DC");
 					netlist[ne].valor=atof(netlistParams[4]);
+#ifdef DEBUG
 					printf("%s %i %i %s %g\n",netlist[ne].nome,netlist[ne].a,netlist[ne].b,netlist[ne].tipo,creal(netlist[ne].valor));
+#endif
 				}
 				else if (strcmp(modelo,"SIN")==0)
 				{
@@ -329,8 +323,10 @@ int main(void)
 					netlist[ne].param4=atof(netlistParams[8]);
 					netlist[ne].param5=atof(netlistParams[9]);
 					netlist[ne].param6=atof(netlistParams[10]);
+#ifdef DEBUG
 					printf("%s %i %i %s(%g %g %g %g %g %g %g)\n",netlist[ne].nome,netlist[ne].a,netlist[ne].b,netlist[ne].tipo,creal(netlist[ne].valor)
 							,netlist[ne].param1,netlist[ne].param2,netlist[ne].param3,netlist[ne].param4,netlist[ne].param5,netlist[ne].param6);
+#endif
 				}
 				else if (strcmp(modelo,"PULSE")==0)
 				{
@@ -343,8 +339,10 @@ int main(void)
 					netlist[ne].param5=atof(netlistParams[9]);
 					netlist[ne].param6=atof(netlistParams[10]);
 					netlist[ne].param7=atof(netlistParams[11]);
+#ifdef DEBUG
 					printf("%s %i %i %s(%g %g %g %g %g %g %g %g)\n",netlist[ne].nome,netlist[ne].a,netlist[ne].b,netlist[ne].tipo,netlist[ne].valor,netlist[ne].param1,netlist[ne].param2
 							,netlist[ne].param3,netlist[ne].param4,netlist[ne].param5,netlist[ne].param6,netlist[ne].param7);
+#endif
 				}
 				else
 				{
@@ -364,8 +362,31 @@ int main(void)
 				netlist[ne].b=numero(netlistParams[2]);
 				netlist[ne].valor=atof(netlistParams[3]);
 				netlist[ne].ic = 0;
+
+				if (tipo=='L') {
+					indutores[indiceIndutores] = &netlist[ne];
+					indiceIndutores++;
+				}
+#ifdef DEBUG
 				printf("%s %i %i %g\n",netlist[ne].nome,netlist[ne].a,netlist[ne].b,netlist[ne].valor);
+#endif
 			}
+//			else if (tipo=='K') {
+//				elemento* L1,L2 = 0;
+//				float m;
+//				for (i=0;i<indiceIndutores;i++) {
+//					if (L1 == 0 || L2 == 0) {
+//						if (strcmp(indutores[i]->nome,netlistParams[1]) == 0)
+//							L1 = indutores[i];
+//						else if (strcmp(indutores[i]->nome,netlistParams[2]) == 0)
+//							L2 = indutores[i];
+//					}
+//				}
+//
+//				netlist[ne].a
+//				netlist[ne].valor = atof(netlistParams[3]) * sqrt(L1->valor * L2->valor);
+//
+//			}
 			else if (tipo=='G' || tipo=='E' || tipo=='F' || tipo=='H') {
 				//		  sscanf(p,"%10s%10s%10s%10s%lg",na,nb,nc,nd,&netlist[ne].valor);
 				netlist[ne].a=numero(netlistParams[1]);
@@ -373,7 +394,9 @@ int main(void)
 				netlist[ne].c=numero(netlistParams[3]);
 				netlist[ne].d=numero(netlistParams[4]);
 				netlist[ne].valor = atof(netlistParams[5]);
+#ifdef DEBUG
 				printf("%s %i %i %i %i %g\n",netlist[ne].nome,netlist[ne].a,netlist[ne].b,netlist[ne].c,netlist[ne].d,netlist[ne].valor);
+#endif
 			}
 			else if (tipo=='O') {
 				//		  sscanf(p,"%10s%10s%10s%10s",na,nb,nc,nd);
@@ -381,13 +404,14 @@ int main(void)
 				netlist[ne].b=numero(netlistParams[2]);
 				netlist[ne].c=numero(netlistParams[3]);
 				netlist[ne].d=numero(netlistParams[4]);
+#ifdef DEBUG
 				printf("%s %i %i %i %i\n",netlist[ne].nome,netlist[ne].a,netlist[ne].b,netlist[ne].c,netlist[ne].d);
+#endif
 			}
 			else if (tipo == '.'){
 				//sscanf(p,"%d %d",tempoFinal,passo);
 				tempoFinal = atof(netlistParams[1]);
 				passo = atof(netlistParams[2]);
-				printf("Tempo Final: %f ; Passo: %f\n",tempoFinal,passo);
 			}
 			else {
 				printf("Elemento desconhecido: %s\n",txt);
@@ -403,7 +427,7 @@ int main(void)
 	nn=nv;
 	for (i=1; i<=ne; i++) {
 		tipo=netlist[i].nome[0];
-		if (tipo=='V' || tipo=='E' || tipo=='F' || tipo=='O') {
+		if (tipo=='V' || tipo=='E' || tipo=='F' || tipo=='O' || tipo == 'L') {
 			nv++;
 			if (nv>MAX_NOS) {
 				printf("As correntes extra excederam o numero de variaveis permitido (%d)\n",MAX_NOS);
@@ -425,14 +449,16 @@ int main(void)
 			netlist[i].y=nv;
 		}
 	}
-#if defined(_WIN32) && defined(DEBUG)
+#ifdef DEBUG
+
+#ifdef _WIN32
 	getch();
 #endif
 	/* Lista tudo */
 	printf("Variaveis internas: \n");
 	for (i=0; i<=nv; i++)
 		printf("%d -> %s\n",i,lista[i]);
-#if defined(_WIN32) && defined(DEBUG)
+#ifdef _WIN32
 	getch();
 #endif
 	printf("Netlist interno final\n");
@@ -452,13 +478,18 @@ int main(void)
 		else if (tipo=='H')
 			printf("Correntes jx e jy: %d, %d\n",netlist[i].x,netlist[i].y);
 	}
-#if defined(_WIN32) && defined(DEBUG)
+#ifdef _WIN32
 	getch();
 #endif
 	/* Monta o sistema nodal modificado */
+
 	printf("O circuito tem %d nos, %d variaveis e %d elementos\n",nn,nv,ne);
-#if defined(_WIN32) && defined(DEBUG)
+
+
+#ifdef _WIN32
 	getch();
+#endif
+
 #endif
 	/* Zera sistema */
 
@@ -479,41 +510,30 @@ int main(void)
 	do
 	{
 
-		printf("Iniciando varredura de tempo\nZerando sistema nodal\n");
-		for(i=0;i<=nv;i++){
-			for(j=0;j<=nv+1;j++) {
-				printf("Zerando item Yt[%i][%i]\n",i,j);
+		for(i=0;i<=nv;i++)
+			for(j=0;j<=nv+1;j++)
 				Yt[i][j] = 0;
-			}
-		}
 
 		elemento *fonte;
 		int indiceFonte = 0;
-		printf("Indice FONTES: %i\n",indiceFontes);
 		for (k=0;k<indiceFontes;k++) {
-			printf("Varrendo fontes %i %p %s\n",k,fontes[k],(*fontes[k]).nome);
-#ifdef USE_HARMONICS
 			for(indiceHarmonicos=0;indiceHarmonicos<maxHarmonicos;indiceHarmonicos++) {
 				fonte=getHarmonic(fontes[k],indiceHarmonicos);
-#else
-				fonte=fontes[k];
-				indiceHarmonicos = 1;
-#endif
-				indiceFonte = (*fontes[k]).netlistIndex;
+
+				indiceFonte = fontes[k]->netlistIndex;
 				if (fonte==0) {
+#ifdef DEBUG
 					printf("Nao ha mais harmonicos para essa fonte\n");
+#endif
 				}else {
-					printf("Adicionando fonte %s com\n\tDC=%f\n\tamplitude=%f\n\tfrequencia=%f\n\tfase=%f\t\nangulo=%f\n",(*fonte).tipo,creal((*fonte).valor),creal((*fonte).param1),creal((*fonte).param2),creal((*fonte).param5),creal((*fonte).param6));
 					for (i=0; i<=nv; i++) {
 						for (j=0; j<=nv+1; j++)
 							Yn[i][j]=0;
 					}
-					printf("Montando estampas: ne=%i\n",ne);
 					/* Monta estampas */
 					for (i=1; i<=ne; i++) {
 						tipo=netlist[i].nome[0];
 						if (tipo == 'V' && ! i == indiceFonte) {
-							printf("Adicionando fonte 0\n");
 							Yn[netlist[k].a][netlist[i].x]+=1;
 							Yn[netlist[k].b][netlist[i].x]-=1;
 							Yn[netlist[k].x][netlist[i].a]-=1;
@@ -531,16 +551,10 @@ int main(void)
 						}
 
 						else if (tipo=='C'){
-
-							printf("Frequencia da fonte: %f PI=%f I^2=%i\n",(*fonte).param2,M_PI,I*I);
-
-							if ((*fonte).param2 == 0)
+							if (fonte->param2 == 0)
 								g = 1/ABERTO;
 							else
-								g=I * (*fonte).param2*2*M_PI * netlist[i].valor;
-
-
-							printf("CAPACITANCE: %f +j%f",creal(g),cimag(g));
+								g=I * fonte->param2*2*M_PI * netlist[i].valor;
 
 							//printf("Capacitor - impedancia=%f + j%f\n",creal(g),cimag(g));
 							Yn[netlist[i].a][netlist[i].a]+=g;
@@ -549,14 +563,16 @@ int main(void)
 							Yn[netlist[i].b][netlist[i].a]-=g;
 						}
 						else if(tipo=='L'){
-							if ((*fonte).param2 == 0)
-								g=1/(I * (*fonte).param2*2*M_PI * netlist[i].valor);
+							if (fonte->param2 == 0)
+								g=CURTO;
 							else
-								g=1/CURTO;
-							Yn[netlist[i].a][netlist[i].a]+=g;
-							Yn[netlist[i].b][netlist[i].b]+=g;
-							Yn[netlist[i].a][netlist[i].b]-=g;
-							Yn[netlist[i].b][netlist[i].a]-=g;
+								g=I * fonte->param2*2*M_PI * netlist[i].valor;
+
+							Yn[netlist[i].a][netlist[i].x]-=1;
+							Yn[netlist[i].b][netlist[i].x]+=1;
+							Yn[netlist[i].x][netlist[i].a]+=1;
+							Yn[netlist[i].x][netlist[i].b]-=1;
+							Yn[netlist[i].x][netlist[i].x]+=g;
 						}
 						else if (tipo=='G') {
 							g=netlist[i].valor;
@@ -603,37 +619,35 @@ int main(void)
 						}
 					}
 
-					if ((*fonte).nome[0] =='I') {
-						if (strcmp((*fonte).tipo,"DC") == 0) {
-							g=(*fonte).valor;
-						} else if (strcmp((*fonte).tipo,"SIN") == 0) {
-							g=(*fonte).valor + (*fonte).param1*sin(t*(*fonte).param2 + (*fonte).param5);
-						} else if (strcmp((*fonte).tipo,"PULSE") == 0) {
+					if (fonte->nome[0] =='I') {
+						if (strcmp(fonte->tipo,"DC") == 0) {
+							g=fonte->valor;
+						} else if (strcmp(fonte->tipo,"SIN") == 0) {
+							g=fonte->param1*cos(fonte->param6*M_PI/180) + I*fonte->param1*sin(fonte->param6*M_PI/180);
+						} else if (strcmp(fonte->tipo,"PULSE") == 0) {
 
 						}
-						Yn[(*fonte).a][nv+1]-=g;
-						Yn[(*fonte).b][nv+1]+=g;
+						Yn[fonte->a][nv+1]-=g;
+						Yn[fonte->b][nv+1]+=g;
 					}
-					else if ((*fonte).nome[0] == 'V') {
-						printf("Adicionando fonte de tensao TIPO=%s\n",(*fonte).tipo);
-						Yn[(*fonte).a][(*fonte).x] += 1;
-						Yn[(*fonte).b][(*fonte).x] -= 1;
-						Yn[(*fonte).x][(*fonte).a] -= 1;
-						Yn[(*fonte).x][(*fonte).b] += 1;
-						printf("VERIFICANDO TIPO DA FONTE\n");
-						if (strcmp((*fonte).tipo,"DC") == 0) {
-							printf("VALOR DA FONTE: %f\n",(*fonte).valor);
-							Yn[(*fonte).x][nv+1] -= (*fonte).valor;
-						} else if(strcmp((*fonte).tipo,"SIN") == 0) {
-							printf("Adicionando fonte senoidal com\n\tDC=%f\n\tamplitude=%f\n\tfrequencia=%f\n\tfase=%f\t\nangulo=%f\n",creal((*fonte).valor),creal((*fonte).param1),creal((*fonte).param2),creal((*fonte).param5),creal((*fonte).param6));
-							Yn[(*fonte).x][nv+1] -= (*fonte).param1*cos((*fonte).param6*M_PI/180) + I*(*fonte).param1*sin((*fonte).param6*M_PI/180);
-							printf("Valor da fonte: %f\n",Yn[(*fonte).x][nv+1]);
-						} else if (strcmp((*fonte).tipo,"PULSE") == 0) {
+					else if (fonte->nome[0] == 'V') {
+						Yn[fonte->a][fonte->x] += 1;
+						Yn[fonte->b][fonte->x] -= 1;
+						Yn[fonte->x][fonte->a] -= 1;
+						Yn[fonte->x][fonte->b] += 1;
+						if (strcmp(fonte->tipo,"DC") == 0) {
+							Yn[fonte->x][nv+1] -= fonte->valor;
+						} else if(strcmp(fonte->tipo,"SIN") == 0) {
+							Yn[fonte->x][nv+1] -= fonte->param1*cos(fonte->param6*M_PI/180) + I*fonte->param1*sin(fonte->param6*M_PI/180);
+						} else if (strcmp(fonte->tipo,"PULSE") == 0) {
 
 						} else {
+#ifdef DEBUG
 							printf("TIPO DA FONTE NAO IDENTIFICADO\n");
+#endif
 						}
 					}
+#ifdef DEBUG
 					/* Opcional: Mostra o sistema apos a montagem da estampa */
 					//	printf("Sistema apos a estampa de %s\n",netlist[i].nome);
 					for (i=1; i<=nv; i++) {
@@ -644,62 +658,61 @@ int main(void)
 								printf(" ........... ");
 						printf("\n");
 					}
+#endif
 #if defined(_WIN32) && defined(DEBUG)
 					getch();
 #endif
 					/* Resolve o sistema */
-
-					resolversistema();
-
-					/* Opcional: Mostra o sistema resolvido */
-					printf("Sistema resolvido:\n");
-					float fasor;
-					for (i=1; i<=nv; i++) {
-						for (j=1; j<=nv+1; j++) {
-
-							if ((*fonte).param2 == 0)
-								fasor = creal(Yn[i][j]);
-							else
-								fasor = cabs(Yn[i][j])*sin(indiceHarmonicos*(*fonte).param2*2*M_PI*t + carg(Yn[i][j]));
-
-							Yt[i][j] += fasor;
+					// Se o sistema for singular para essa fonte, vamos ignorar sua contribuição na superposição.
+					if (resolversistema() == 0) {
+						/* Opcional: Mostra o sistema resolvido */
 #ifdef DEBUG
-							if (Yn[i][j]!=0)
-								printf("%+3.1f ",fasor);
-							else
-								printf(" ... ");
+						printf("Sistema resolvido:\n");
+#endif
+						float fasor;
+						for (i=1; i<=nv; i++) {
+							for (j=1; j<=nv+1; j++) {
+
+								if (fonte->param2 == 0)
+									fasor = creal(Yn[i][j]);
+								else
+									fasor = cabs(Yn[i][j])*sin(indiceHarmonicos*fonte->param2*2*M_PI*t + carg(Yn[i][j]));
+
+								Yt[i][j] += fasor;
+#ifdef DEBUG
+								if (Yn[i][j]!=0)
+									printf("%+3.1f ",fasor);
+								else
+									printf(" ... ");
+#endif
+							}
+#ifdef DEBUG
+							printf("\n");
 #endif
 						}
-						printf("\n");
-					}
 #if defined(_WIN32) && defined(DEBUG)
-					getch();
+						getch();
 #endif
-#ifdef USE_HARMONICS
-					printf("Liberando harmonico %i da fonte\n",indiceHarmonicos);
-					printf("fontes[k]=%p\n",fontes[k]);
+					}
 					free(fonte);
-					printf("Liberado! fontes[k]=%p\n",fontes[k]);
 				}
-
-				printf("Pegando proximo harmonico %i da fonte %i\n",indiceHarmonicos+1,k);
-#endif
 			}
-#ifdef USE_HARMONICS
-			printf("Finalizado analisando harmonicos da fonte indice %i\n",k);
-#endif
 		}
 
-		fprintf(outputFile,"%.0f",t);
+		fprintf(outputFile,"%g",t);
 
 		/* Mostra solucao */
+#ifdef DEBUG
 		printf("Solucao:\n");
 		strcpy(txt,"Tensao");
+#endif
 		for (i=1; i<=nv; i++) {
+			fprintf(outputFile," %g",Yt[i][nv+1]);
+#ifdef DEBUG
 			if (i==nn+1)
 				strcpy(txt,"Corrente");
 			printf("%s %s: %g\n",txt,lista[i],Yt[i][nv+1]);
-			fprintf(outputFile," %g",Yt[i][nv+1]);
+#endif
 		}
 		fprintf(outputFile,"\n");
 		/* Salva solucao */
@@ -713,20 +726,19 @@ int main(void)
 //			}
 //			fprintf(arquivo,"\n");
 //		}
-
+#ifdef DEBUG
 		printf("Tempo atual: %f\n",t);
 		printf("Passo: %f\n",passo);
-		t = t + passo;
-		printf("Tempo + passo: %f\n",t);
 		printf("Tempo Final: %f\n",tempoFinal);
-		contadorPassos++;
+#endif
+		t = t + passo;
 #if defined(_WIN32) && defined(DEBUG)
 		getch();
 #endif
 	}while(t<tempoFinal);
 
 	fclose(outputFile);
-
+	printf("Analise concluida. O resultado está salvo no arquivo out.tab\n");
 	return 0;
 }
 
