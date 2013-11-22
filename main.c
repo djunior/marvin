@@ -288,7 +288,6 @@ int main(void)
 
 		txt[0]=toupper(txt[0]);
 		tipo=txt[0];
-		//sscanf(txt,"%10s",netlist[ne].nome);
 		//p=txt+strlen(netlist[ne].nome); /* Inicio dos parametros */
 		/* O que e lido depende do tipo */
 		if (tipo=='*') { /* Comentario comeca com "*" */
@@ -759,17 +758,7 @@ int main(void)
 #endif
 		}
 		fprintf(outputFile,"\n");
-		/* Salva solucao */
-		//		if (t==0)
-		//			passo=(passo*1000.0);
 
-//		if (contadorDePassos==0){
-//			fprintf(arquivo,"%.15f ",t);
-//			for (i=1; i<=nv; i++) {
-//				fprintf(arquivo,"%.15f ",Yn[i][nv+1]);
-//			}
-//			fprintf(arquivo,"\n");
-//		}
 #ifdef DEBUG
 		printf("Tempo atual: %f\n",t);
 		printf("Passo: %f\n",passo);
