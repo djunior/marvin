@@ -113,6 +113,7 @@ char
 /* Foram colocados limites nos formatos de leitura para alguma protecao
 contra excesso de caracteres nestas variaveis */
 nomearquivo[MAX_LINHA+1],
+outputFilename[MAX_LINHA+1],
 tipo,
 na[MAX_NOME],nb[MAX_NOME],nc[MAX_NOME],nd[MAX_NOME],
 lista[MAX_NOS+1][MAX_NOME+2], /*Tem que caber jx antes do nome */
@@ -270,6 +271,11 @@ int main(void)
 		printf("Arquivo %s inexistente\n",nomearquivo);
 		goto denovo;
 	}
+
+	//Copiando o nome do arquivo de entrada sem a extensão de netlist ("net")
+	strncpy(outputFilename,nomearquivo,strlen(nomearquivo)-3);
+	//Adicionando a extensão tab ao nome do arquivo de saida
+	strcat(outputFilename,"tab");
 	printf("Lendo netlist:\n");
 	fgets(txt,MAX_LINHA,arquivo);
 	printf("Titulo: %s",txt);
@@ -526,7 +532,7 @@ int main(void)
 	// Escrevendo header do arquivo
 	FILE *outputFile;
 	int count=1;
-	outputFile = fopen("out.tab","w");
+	outputFile = fopen(outputFilename,"w");
 	fprintf(outputFile,"t");
 	for (count=1; count<=nv; count++) {
 		fprintf(outputFile," %s",lista[count]);
@@ -776,7 +782,7 @@ int main(void)
 	}while(t<tempoFinal);
 
 	fclose(outputFile);
-	printf("Analise concluida. O resultado está salvo no arquivo out.tab\n");
+	printf("Analise concluida. O resultado está salvo no arquivo %s\n",outputFilename);
 	return 0;
 }
 
