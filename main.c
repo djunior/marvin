@@ -93,7 +93,7 @@ ne, /* Elementos */
 nv, /* Variaveis */
 nn, /* Nos */
 indiceFontes,
-indiceIndutores=0;
+indiceIndutores=0,
 indiceTransformadores=0;
 
 unsigned maxHarmonicos=15;
