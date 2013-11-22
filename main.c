@@ -28,8 +28,25 @@ As fontes F e H tem o ramo de entrada em curto
 O amplificador operacional ideal tem a saida suspensa
 Os nos podem ser nomes
  */
+
+/*
+Versão 1.1
+Resolve circuitos no estado permanente senoidal.
+Por David E. de Britto Junior.
+
+Novos elementos aceitos no netlist:
+Capacitor: C<nome> <no+> <no-> <capacitancia>
+Indutor: L<nome> <no+> <no-> <indutancia>
+Transformador: K<nome> <L1> <L2> <acoplamento>
+
+Fontes Independentes (Corrente ou tensão):
+DC <valor>
+SIN <nivel contínuo> <amplitude> <frequência (Hz)> <atraso*> <atenuação*> <ângulo> <número de ciclos*>
+
+ */
+
 //#define DEBUG true
-#define versao "1.0h - 18/6/2011"
+#define versao "1.1 - 22/11/2013"
 #include <stdio.h>
 
 //Include especifico para Windows
@@ -66,9 +83,10 @@ typedef struct elemento { /* Elemento do netlist */
 	double param6;
 	double param7;
 	int a,b,c,d,x,y,netlistIndex;
+
 } elemento;
 
-elemento netlist[MAX_ELEM], *fontes[MAX_ELEM], *indutores[MAX_ELEM]; /* Netlist */
+elemento netlist[MAX_ELEM], *fontes[MAX_ELEM], *indutores[MAX_ELEM], *transformadores[MAX_ELEM][3]; /* Netlist */
 
 int
 ne, /* Elementos */
@@ -76,6 +94,7 @@ nv, /* Variaveis */
 nn, /* Nos */
 indiceFontes,
 indiceIndutores=0;
+indiceTransformadores=0;
 
 unsigned maxHarmonicos=15;
 
@@ -237,6 +256,7 @@ int main(void)
 	//clrscr();
 	printf("Programa demonstrativo de analise nodal modificada\n");
 	printf("Por Antonio Carlos M. de Queiroz - acmq@coe.ufrj.br\n");
+	printf("Adaptado por David E. de Britto Junior para resolver circuitos em estado permanente senoidal.");
 	printf("Versao %s\n",versao);
 	denovo:
 	/* Leitura do netlist */
@@ -371,22 +391,23 @@ int main(void)
 				printf("%s %i %i %g\n",netlist[ne].nome,netlist[ne].a,netlist[ne].b,netlist[ne].valor);
 #endif
 			}
-//			else if (tipo=='K') {
-//				elemento* L1,L2 = 0;
-//				float m;
-//				for (i=0;i<indiceIndutores;i++) {
-//					if (L1 == 0 || L2 == 0) {
-//						if (strcmp(indutores[i]->nome,netlistParams[1]) == 0)
-//							L1 = indutores[i];
-//						else if (strcmp(indutores[i]->nome,netlistParams[2]) == 0)
-//							L2 = indutores[i];
-//					}
-//				}
-//
-//				netlist[ne].a
-//				netlist[ne].valor = atof(netlistParams[3]) * sqrt(L1->valor * L2->valor);
-//
-//			}
+			else if (tipo=='K') {
+				elemento *L1,*L2 = 0;
+				for (i=0;i<indiceIndutores;i++) {
+					if (L1 == 0 || L2 == 0) {
+						if (strcmp(indutores[i]->nome,netlistParams[1]) == 0)
+							L1 = indutores[i];
+						else if (strcmp(indutores[i]->nome,netlistParams[2]) == 0)
+							L2 = indutores[i];
+					}
+				}
+
+				netlist[ne].valor = atof(netlistParams[3]) * sqrt(L1->valor * L2->valor);
+				transformadores[indiceTransformadores][0] = &netlist[ne];
+				transformadores[indiceTransformadores][1] = L1;
+				transformadores[indiceTransformadores][2] = L2;
+				indiceTransformadores++;
+			}
 			else if (tipo=='G' || tipo=='E' || tipo=='F' || tipo=='H') {
 				//		  sscanf(p,"%10s%10s%10s%10s%lg",na,nb,nc,nd,&netlist[ne].valor);
 				netlist[ne].a=numero(netlistParams[1]);
@@ -448,6 +469,11 @@ int main(void)
 			strcpy(lista[nv],"jy"); strcat(lista[nv],netlist[i].nome);
 			netlist[i].y=nv;
 		}
+	}
+
+	for (i=0;i<indiceTransformadores;i++){
+		transformadores[i][0]->x = transformadores[i][1]->x;
+		transformadores[i][0]->y = transformadores[i][1]->x;
 	}
 #ifdef DEBUG
 
@@ -573,6 +599,16 @@ int main(void)
 							Yn[netlist[i].x][netlist[i].a]+=1;
 							Yn[netlist[i].x][netlist[i].b]-=1;
 							Yn[netlist[i].x][netlist[i].x]+=g;
+						}
+						else if (tipo == 'K'){
+							if (fonte->param2 == 0)
+								g=CURTO;
+							else
+								g=I * fonte->param2*2*M_PI * netlist[i].valor;
+
+							Yn[netlist[i].x][netlist[i].y]+=g;
+							Yn[netlist[i].y][netlist[i].x]+=g;
+
 						}
 						else if (tipo=='G') {
 							g=netlist[i].valor;
