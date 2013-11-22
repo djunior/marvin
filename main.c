@@ -92,6 +92,8 @@ int
 ne, /* Elementos */
 nv, /* Variaveis */
 nn, /* Nos */
+
+// Contadores do numero de fontes de tensão, indutores e transformadores
 indiceFontes,
 indiceIndutores=0,
 indiceTransformadores=0;
