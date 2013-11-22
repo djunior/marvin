@@ -566,12 +566,12 @@ int main(void)
 					/* Monta estampas */
 					for (i=1; i<=ne; i++) {
 						tipo=netlist[i].nome[0];
-						if (tipo == 'V' && ! i == indiceFonte) {
-							Yn[netlist[k].a][netlist[i].x]+=1;
-							Yn[netlist[k].b][netlist[i].x]-=1;
-							Yn[netlist[k].x][netlist[i].a]-=1;
-							Yn[netlist[k].x][netlist[i].b]+=1;
-							Yn[netlist[k].x][nv+1]-=0;
+						if (tipo == 'V' && i != indiceFonte) {
+							Yn[netlist[i].a][netlist[i].x]+=1;
+							Yn[netlist[i].b][netlist[i].x]-=1;
+							Yn[netlist[i].x][netlist[i].a]-=1;
+							Yn[netlist[i].x][netlist[i].b]+=1;
+							Yn[netlist[i].x][nv+1]-=0;
 						} else if (tipo == 'I'){
 							// do nothing
 						}
