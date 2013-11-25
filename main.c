@@ -655,10 +655,10 @@ int main(void)
 							else
 								g=I * fonte->param2*2*M_PI * netlist[i].valor;
 
-							Yn[netlist[i].a][netlist[i].x]-=1;
-							Yn[netlist[i].b][netlist[i].x]+=1;
-							Yn[netlist[i].x][netlist[i].a]+=1;
-							Yn[netlist[i].x][netlist[i].b]-=1;
+							Yn[netlist[i].a][netlist[i].x]+=1;
+							Yn[netlist[i].b][netlist[i].x]-=1;
+							Yn[netlist[i].x][netlist[i].a]-=1;
+							Yn[netlist[i].x][netlist[i].b]+=1;
 							Yn[netlist[i].x][netlist[i].x]+=g;
 						}
 						else if (tipo == 'K'){

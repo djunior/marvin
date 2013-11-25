@@ -22,19 +22,19 @@ endif
 # Add inputs and outputs from these tool invocations to the build variables 
 
 # All Target
-all: Circuito2_Impedancia.exe
+all: marvin.exe
 
 # Tool invocations
-Circuito2_Impedancia.exe: $(OBJS) $(USER_OBJS)
+marvin.exe: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
-	@echo 'Invoking: MacOS X C Linker'
-	gcc  -o "Circuito2_Impedancia.exe" $(OBJS) $(USER_OBJS) $(LIBS)
+	@echo 'Invoking: GCC C Linker'
+	gcc  -o"marvin.exe" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) $(OBJS)$(C_DEPS)$(EXECUTABLES) Circuito2_Impedancia.exe
+	-$(RM) $(OBJS)$(C_DEPS)$(EXECUTABLES) marvin.exe
 	-@echo ' '
 
 .PHONY: all clean dependents
