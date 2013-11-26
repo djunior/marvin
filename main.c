@@ -69,7 +69,7 @@ SIN <nivel contínuo> <amplitude> <frequência (Hz)> <atraso*> <atenuação*> <ângul
 #define TOLG 1e-9
 #define ABERTO 1e9
 #define CURTO 1e-9
-
+#define MAX_HARMONIC_LIMIT 200
 
 typedef struct elemento { /* Elemento do netlist */
 	char nome[MAX_NOME];
@@ -97,7 +97,8 @@ nn, /* Nos */
 // Contadores do numero de fontes de tensão, indutores e transformadores
 indiceFontes,
 indiceIndutores=0,
-indiceTransformadores=0;
+indiceTransformadores=0,
+repeatHarmonic = 0;
 
 unsigned maxHarmonicos=15;
 
@@ -254,20 +255,20 @@ elemento* getHarmonic(elemento *fonte,int index) {
 			double k1 = (fonte->param3) ? fonte->valor - (fonte->param1 - fonte->valor) * tOff / fonte->param3 : fonte->valor;
 			double k2 = (fonte->param4) ? fonte->param1 - (fonte->valor - fonte->param1) * (fonte->param6 - fonte->param4) / fonte->param4 : fonte->param1;
 			ret->valor = fonte->valor / (M_PI * index) * sin(2 * M_PI * index * tOff / fonte->param6) +
-			                                        (c1 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (cos(2 * M_PI * index *(tOff + fonte->param3) / fonte->param6) - cos(2 * M_PI * index * tOff / fonte->param6)) +
-			                                        (tOff + fonte->param3) * sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - tOff * sin(2 * M_PI * index * tOff / fonte->param6)) +
-			                                        k1 / (M_PI * index) * (sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - sin(2 * M_PI * index * tOff / fonte->param6))) +
-			                                        fonte->param1 / (M_PI * index) * (sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6) - sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6)) +
-			                                        (c2 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (cos(2 * M_PI * index) - cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
-			                                        fonte->param6 * sin(2 * M_PI * index) - (fonte->param6 - fonte->param4) * sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
-			                                        k2 / (M_PI * index) * (sin(2 * M_PI * index) - sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)));
+					(c1 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (cos(2 * M_PI * index *(tOff + fonte->param3) / fonte->param6) - cos(2 * M_PI * index * tOff / fonte->param6)) +
+							(tOff + fonte->param3) * sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - tOff * sin(2 * M_PI * index * tOff / fonte->param6)) +
+							k1 / (M_PI * index) * (sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - sin(2 * M_PI * index * tOff / fonte->param6))) +
+							fonte->param1 / (M_PI * index) * (sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6) - sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6)) +
+							(c2 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (cos(2 * M_PI * index) - cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
+									fonte->param6 * sin(2 * M_PI * index) - (fonte->param6 - fonte->param4) * sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
+									k2 / (M_PI * index) * (sin(2 * M_PI * index) - sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)));
 
 			ret->param1 = (fonte->valor / (M_PI * index) * (1 - cos(2 * M_PI * index * tOff / fonte->param6)) +
-									(c1 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - sin(2 * M_PI * index * tOff / fonte->param6)) +
-									tOff * cos(2 * M_PI * index * tOff / fonte->param6) - (tOff + fonte->param3) * cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6)) +
-									k1 / (M_PI * index) * (cos(2 * M_PI * index	* tOff/ fonte->param6) - cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6))) +
-									fonte->param1 / (M_PI * index) * (cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
-									(c2 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (sin(2 * M_PI * index) - sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
+					(c1 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - sin(2 * M_PI * index * tOff / fonte->param6)) +
+							tOff * cos(2 * M_PI * index * tOff / fonte->param6) - (tOff + fonte->param3) * cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6)) +
+							k1 / (M_PI * index) * (cos(2 * M_PI * index	* tOff/ fonte->param6) - cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6))) +
+							fonte->param1 / (M_PI * index) * (cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
+							(c2 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (sin(2 * M_PI * index) - sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
 									(fonte->param6 - fonte->param4) * cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6) - fonte->param6 * cos(2 * M_PI * index)) +
 									k2 / (M_PI * index) * (cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6) - cos(2 * M_PI * index))));
 
@@ -303,7 +304,7 @@ int main(void)
 		printf("Arquivo %s inexistente\n",nomearquivo);
 		goto denovo;
 	}
-
+	printf("Lendo netlist do arquivo: %s\n",nomearquivo);
 	//Copiando o nome do arquivo de entrada sem a extensão de netlist ("net")
 	strncpy(outputFilename,nomearquivo,strlen(nomearquivo)-3);
 	//Adicionando a extensão tab ao nome do arquivo de saida
@@ -435,14 +436,14 @@ int main(void)
 				elemento *L1,*L2 = 0;
 				for (i=0;i<indiceIndutores;i++) {
 					if (L1 == 0 || L2 == 0) {
-						if (strcmp(indutores[i]->nome,netlistParams[5]) == 0)
+						if (strcmp(indutores[i]->nome,netlistParams[1]) == 0)
 							L1 = indutores[i];
-						else if (strcmp(indutores[i]->nome,netlistParams[6]) == 0)
+						else if (strcmp(indutores[i]->nome,netlistParams[2]) == 0)
 							L2 = indutores[i];
 					}
 				}
 
-				netlist[ne].valor = atof(netlistParams[7]) * sqrt(L1->valor * L2->valor);
+				netlist[ne].valor = atof(netlistParams[3]) * sqrt(L1->valor * L2->valor);
 				netlist[ne].param1 = indiceTransformadores;
 				transformadores[indiceTransformadores][0] = &netlist[ne];
 				transformadores[indiceTransformadores][1] = L1;
@@ -474,6 +475,14 @@ int main(void)
 				//sscanf(p,"%d %d",tempoFinal,passo);
 				tempoFinal = atof(netlistParams[1]);
 				passo = atof(netlistParams[2]);
+				if (atoi(netlistParams[3])) {
+					maxHarmonicos = atoi(netlistParams[3]);
+				} else {
+					maxHarmonicos = 1/passo;
+					if (maxHarmonicos > MAX_HARMONIC_LIMIT)
+						maxHarmonicos = MAX_HARMONIC_LIMIT;
+				}
+				printf("Tempo de simulacao: %g\nPasso=%g\nNumero de harmonicos=%i\n",tempoFinal,passo,maxHarmonicos);
 			}
 			else {
 				printf("Elemento desconhecido: %s\n",txt);
@@ -481,6 +490,11 @@ int main(void)
 				getch();
 #endif
 				exit(1);
+			}
+
+			//Limpando netlistParams:
+			for (i=0;i<indice;i++){
+				strcpy(netlistParams[i],"\0");
 			}
 		}
 	}
@@ -705,13 +719,13 @@ int main(void)
 					}
 
 					if (fonte->nome[0] =='I') {
-						if (strcmp(fonte->tipo,"DC") == 0) {
+						if (strcmp(fonte->tipo,"DC") == 0)
 							g=fonte->valor;
-						} else if (strcmp(fonte->tipo,"SIN") == 0) {
+						else if (strcmp(fonte->tipo,"SIN") == 0)
 							g=fonte->param1*cos(fonte->param6*M_PI/180) + I*fonte->param1*sin(fonte->param6*M_PI/180);
-						} else if (strcmp(fonte->tipo,"PULSE") == 0) {
-							g=fonte->valor + I*fonte->param1;
-						}
+						else if (strcmp(fonte->tipo,"PULSE") == 0)
+							g=fonte->valor + I*fonte->valor;
+
 						Yn[fonte->a][nv+1]-=g;
 						Yn[fonte->b][nv+1]+=g;
 					}
@@ -726,7 +740,7 @@ int main(void)
 							Yn[fonte->x][nv+1] -= fonte->param1*cos(fonte->param6*M_PI/180) + I*fonte->param1*sin(fonte->param6*M_PI/180);
 						} else if (strcmp(fonte->tipo,"PULSE") == 0) {
 							Yn[fonte->x][nv+1] -= fonte->valor;
-							if (indiceHarmonicos > 0)
+							if (fonte->param2 > 0)
 								Yn[fonte->x][nv+1] -= I*fonte->param1;
 
 						} else {
