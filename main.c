@@ -282,6 +282,7 @@ elemento* getHarmonic(elemento *fonte,int index) {
 	return ret;
 }
 
+
 int main(void)
 {
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -431,7 +432,6 @@ int main(void)
 #endif
 			}
 			else if (tipo=='K') {
-				printf("LENDO TRANSFORMADOR\n");
 				elemento *L1,*L2 = 0;
 				for (i=0;i<indiceIndutores;i++) {
 					if (L1 == 0 || L2 == 0) {
@@ -442,17 +442,12 @@ int main(void)
 					}
 				}
 
-				printf("LENDO TRANSFORMADOR > 1\n");
 				netlist[ne].valor = atof(netlistParams[7]) * sqrt(L1->valor * L2->valor);
-				printf("LENDO TRANSFORMADOR > 2\n");
+				netlist[ne].param1 = indiceTransformadores;
 				transformadores[indiceTransformadores][0] = &netlist[ne];
-				printf("LENDO TRANSFORMADOR > 3\n");
 				transformadores[indiceTransformadores][1] = L1;
-				printf("LENDO TRANSFORMADOR > transformadores[%i][1].x=%i\n");
 				transformadores[indiceTransformadores][2] = L2;
-				printf("LENDO TRANSFORMADOR > 5\n");
 				indiceTransformadores++;
-				printf("LENDO TRANSFORMADOR > 6\n");
 			}
 			else if (tipo=='G' || tipo=='E' || tipo=='F' || tipo=='H') {
 				//		  sscanf(p,"%10s%10s%10s%10s%lg",na,nb,nc,nd,&netlist[ne].valor);
@@ -502,9 +497,7 @@ int main(void)
 			}
 			strcpy(lista[nv],"j"); /* Tem espaco para mais dois caracteres */
 			strcat(lista[nv],netlist[i].nome);
-			printf("Tipo=%c Nome=%s NV=%i\n",tipo,netlist[i].nome,nv);
 			netlist[i].x=nv;
-			printf("DEPOIS Tipo=%c Nome=%s NV=%i\n",tipo,netlist[i].nome,nv);
 		}
 		else if (tipo=='H') {
 			nv=nv+2;
@@ -520,12 +513,8 @@ int main(void)
 	}
 
 	for (i=0;i<indiceTransformadores;i++){
-		printf("Atribuindo acoplamento %s x=%i %i\n",transformadores[i][0]->nome,transformadores[i][1]->x,transformadores[i][2]->x);
-		printf("Nome Indutor1=%s\n",transformadores[i][1]->nome);
-		printf("Nome Indutor2=%s\n",transformadores[i][2]->nome);
 		transformadores[i][0]->x = transformadores[i][1]->x;
 		transformadores[i][0]->y = transformadores[i][2]->x;
-		printf("Apos atribuir acoplamento %s x=%i %i\n",transformadores[i][0]->nome,transformadores[i][0]->x,transformadores[i][0]->y);
 	}
 #ifdef DEBUG
 
@@ -655,23 +644,20 @@ int main(void)
 							else
 								g=I * fonte->param2*2*M_PI * netlist[i].valor;
 
-							Yn[netlist[i].a][netlist[i].x]-=1;
-							Yn[netlist[i].b][netlist[i].x]+=1;
-							Yn[netlist[i].x][netlist[i].a]+=1;
-							Yn[netlist[i].x][netlist[i].b]-=1;
+							Yn[netlist[i].a][netlist[i].x]+=1;
+							Yn[netlist[i].b][netlist[i].x]-=1;
+							Yn[netlist[i].x][netlist[i].a]-=1;
+							Yn[netlist[i].x][netlist[i].b]+=1;
 							Yn[netlist[i].x][netlist[i].x]+=g;
 						}
 						else if (tipo == 'K'){
-							printf("Montando acoplamento de indutores\n");
 							if (fonte->param2 == 0)
 								g=CURTO;
 							else
 								g=I * fonte->param2*2*M_PI * netlist[i].valor;
 
-							printf("Montando acoplamento de indutores1 x=%i y=%i\n",netlist[i].x,netlist[i].y);
 							Yn[netlist[i].x][netlist[i].y]+=g;
 							Yn[netlist[i].y][netlist[i].x]+=g;
-							printf("Montando acoplamento de indutores2\n");
 						}
 						else if (tipo=='G') {
 							g=netlist[i].valor;
@@ -724,7 +710,7 @@ int main(void)
 						} else if (strcmp(fonte->tipo,"SIN") == 0) {
 							g=fonte->param1*cos(fonte->param6*M_PI/180) + I*fonte->param1*sin(fonte->param6*M_PI/180);
 						} else if (strcmp(fonte->tipo,"PULSE") == 0) {
-
+							g=fonte->valor + I*fonte->param1;
 						}
 						Yn[fonte->a][nv+1]-=g;
 						Yn[fonte->b][nv+1]+=g;
@@ -741,10 +727,11 @@ int main(void)
 						} else if (strcmp(fonte->tipo,"PULSE") == 0) {
 							Yn[fonte->x][nv+1] -= fonte->valor;
 							if (indiceHarmonicos > 0)
-								Yn[fonte->x][nv+1] -= fonte->param1;
+								Yn[fonte->x][nv+1] -= I*fonte->param1;
+
 						} else {
 #ifdef DEBUG
-							printf("TIPO DA FONTE NAO IDENTIFICADO\n");
+							printf("Tipo da fonte nao identificado\n");
 #endif
 						}
 					}
