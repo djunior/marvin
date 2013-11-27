@@ -244,35 +244,90 @@ elemento* getHarmonic(elemento *fonte,int index) {
 		}
 		return ret;
 	} else if (strcmp(fonte->tipo,"PULSE") == 0) {
-		double tOff = fonte->param6 - fonte->param5 - fonte->param3 - fonte->param4;
+		/*
+		 	netlist[ne].valor=atof(netlistParams[4]);   // amp 1
+			netlist[ne].param1=atof(netlistParams[5]);  // amp 2
+			netlist[ne].param2=atof(netlistParams[6]);  // atraso
+			netlist[ne].param3=atof(netlistParams[7]);  // tempo subida
+			netlist[ne].param4=atof(netlistParams[8]);  // tempo descida
+			netlist[ne].param5=atof(netlistParams[9]);  // tempo ligado
+			netlist[ne].param6=atof(netlistParams[10]); // periodo
+			netlist[ne].param7=atof(netlistParams[11]); // nao utilizado
+		 */
+
+		double max = fonte->param1;
+		double min = fonte->valor;
+		double atraso = fonte->param2;
+		double tRise = fonte->param3;
+		double tFall = fonte->param4;
+		double tOn = fonte->param5;
+		double period = fonte->param6;
+		double tOff = period - (tRise + tOn + tFall);
+
 		if (index == 0) {
-			ret->valor = 1/fonte->param6 * (fonte->valor * tOff + (fonte->param1 - fonte->valor)*(fonte->param3 + 2*tOff)/2 + fonte->valor*fonte->param3 - tOff*(fonte->param1 - fonte->valor) + fonte->param1*fonte->param5 + (fonte->valor + fonte->param1)*fonte->param4/2);
+			//ret->valor = 1/fonte->param6 * (fonte->valor * tOff + (fonte->param1 - fonte->valor)*(fonte->param3 + 2*tOff)/2 + fonte->valor*fonte->param3 - tOff*(fonte->param1 - fonte->valor) + fonte->param1*fonte->param5 + (fonte->valor + fonte->param1)*fonte->param4/2);
+			ret->valor = (max + min)/2;
 			strcpy(ret->tipo,"DC");
 			return ret;
 		} else {
-			double c1 = (fonte->param3) ? (fonte->param1 - fonte->valor) / fonte->param3 : 0;
-			double c2 = (fonte->param4) ? (fonte->valor - fonte->param1) / fonte->param4 : 0;
-			double k1 = (fonte->param3) ? fonte->valor - (fonte->param1 - fonte->valor) * tOff / fonte->param3 : fonte->valor;
-			double k2 = (fonte->param4) ? fonte->param1 - (fonte->valor - fonte->param1) * (fonte->param6 - fonte->param4) / fonte->param4 : fonte->param1;
-			ret->valor = fonte->valor / (M_PI * index) * sin(2 * M_PI * index * tOff / fonte->param6) +
-					(c1 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (cos(2 * M_PI * index *(tOff + fonte->param3) / fonte->param6) - cos(2 * M_PI * index * tOff / fonte->param6)) +
-							(tOff + fonte->param3) * sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - tOff * sin(2 * M_PI * index * tOff / fonte->param6)) +
-							k1 / (M_PI * index) * (sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - sin(2 * M_PI * index * tOff / fonte->param6))) +
-							fonte->param1 / (M_PI * index) * (sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6) - sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6)) +
-							(c2 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (cos(2 * M_PI * index) - cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
-									fonte->param6 * sin(2 * M_PI * index) - (fonte->param6 - fonte->param4) * sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
-									k2 / (M_PI * index) * (sin(2 * M_PI * index) - sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)));
+			printf("Calculando harmonico %i da fonte %s\n",index,fonte->nome);
+			double w = 2*M_PI*index/period;
+			double t1 = tRise;
+			double t2 = tRise + tOn;
+			double t3 = tRise + tOn + tFall;
+			double t4 = period;
+			printf("w=%g\nt1=%g\nt2=%g\nt3=%g\nt4=%g\n",w,t1,t2,t3,t4);
+			double a = (max-min)/(t2-t3);
+			double b = (min*t2 - max*t3)/(t2-t3);
+			printf("A=%g\nB=%g\n",a,b);
 
-			ret->param1 = (fonte->valor / (M_PI * index) * (1 - cos(2 * M_PI * index * tOff / fonte->param6)) +
-					(c1 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - sin(2 * M_PI * index * tOff / fonte->param6)) +
-							tOff * cos(2 * M_PI * index * tOff / fonte->param6) - (tOff + fonte->param3) * cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6)) +
-							k1 / (M_PI * index) * (cos(2 * M_PI * index	* tOff/ fonte->param6) - cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6))) +
-							fonte->param1 / (M_PI * index) * (cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
-							(c2 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (sin(2 * M_PI * index) - sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
-									(fonte->param6 - fonte->param4) * cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6) - fonte->param6 * cos(2 * M_PI * index)) +
-									k2 / (M_PI * index) * (cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6) - cos(2 * M_PI * index))));
+			if (tRise ==0 && tFall == 0) {
 
-			ret->param2 = 1/ret->param6;
+				ret->valor = (2/period) * (max/w) * sin(w*tOn)
+						   + (2/period) * (min/w) * (sin(w*period) -sin(w*tOn));
+
+				ret->param1 = (2/period) * (min/w) * (1 - cos(w*tOn))
+							+ (2/period) * (min/w) * (cos(w*tOn) - cos(w*period));
+
+			} else {
+				ret->valor = 2/period * pow((1/w),2) * (w*max*sin(w*t1) + ( (max-min)/t1 )*cos(w*t1) - (max-min)/t1 )
+						   + 2/period * (1/w) * (max*sin(w*t2) - max*sin(w*t1))
+						   + 2/period * pow((1/w),2) * ( w*(a*t3 +b)*sin(w*t3) - w*(a*t2 +b)*sin(w*t2) - a*cos(w*t2) + a*cos(w*t3) )
+						   + 2/period *(1/w) * (min*sin(w*t4) - min*sin(w*t3));
+
+				ret->param1 = 2/period * pow((1/w),2) * (-1*w*max*cos(w*t1) + ((max-min)/t1)*sin(w*t1) + min*w )
+							+ 2/period * (1/w) * max * (cos(w*t1) - cos(w*t2))
+							+ 2/period * pow((1/w),2) * (w*(a*t2+b)*cos(w*t2) - w*(a*t3 +b)*cos(w*t3) + a*sin(w*t3) - a*sin(w*t2) )
+							+ 2/period * (1/w) * min * (cos(w*t3) - cos(w*t4));
+
+			}
+			printf("Valor=%g\n",ret->valor);
+			printf("Param1=%g\n",ret->param1);
+			//
+//
+//			double c1 = (fonte->param3) ? (fonte->param1 - fonte->valor) / fonte->param3 : 0;
+//			double c2 = (fonte->param4) ? (fonte->valor - fonte->param1) / fonte->param4 : 0;
+//			double k1 = (fonte->param3) ? fonte->valor - (fonte->param1 - fonte->valor) * tOff / fonte->param3 : fonte->valor;
+//			double k2 = (fonte->param4) ? fonte->param1 - (fonte->valor - fonte->param1) * (fonte->param6 - fonte->param4) / fonte->param4 : fonte->param1;
+//			ret->valor = fonte->valor / (M_PI * index) * sin(2 * M_PI * index * tOff / fonte->param6) +
+//					(c1 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (cos(2 * M_PI * index *(tOff + fonte->param3) / fonte->param6) - cos(2 * M_PI * index * tOff / fonte->param6)) +
+//							(tOff + fonte->param3) * sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - tOff * sin(2 * M_PI * index * tOff / fonte->param6)) +
+//							k1 / (M_PI * index) * (sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - sin(2 * M_PI * index * tOff / fonte->param6))) +
+//							fonte->param1 / (M_PI * index) * (sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6) - sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6)) +
+//							(c2 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (cos(2 * M_PI * index) - cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
+//									fonte->param6 * sin(2 * M_PI * index) - (fonte->param6 - fonte->param4) * sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
+//									k2 / (M_PI * index) * (sin(2 * M_PI * index) - sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)));
+//
+//			ret->param1 = (fonte->valor / (M_PI * index) * (1 - cos(2 * M_PI * index * tOff / fonte->param6)) +
+//					(c1 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (sin(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - sin(2 * M_PI * index * tOff / fonte->param6)) +
+//							tOff * cos(2 * M_PI * index * tOff / fonte->param6) - (tOff + fonte->param3) * cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6)) +
+//							k1 / (M_PI * index) * (cos(2 * M_PI * index	* tOff/ fonte->param6) - cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6))) +
+//							fonte->param1 / (M_PI * index) * (cos(2 * M_PI * index * (tOff + fonte->param3) / fonte->param6) - cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
+//							(c2 / (M_PI * index) * (fonte->param6 / (2 * M_PI * index) * (sin(2 * M_PI * index) - sin(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6)) +
+//									(fonte->param6 - fonte->param4) * cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6) - fonte->param6 * cos(2 * M_PI * index)) +
+//									k2 / (M_PI * index) * (cos(2 * M_PI * index * (fonte->param6 - fonte->param4) / fonte->param6) - cos(2 * M_PI * index))));
+
+			ret->param2 = index/ret->param6;
 			return ret;
 		}
 	} else {
@@ -740,9 +795,6 @@ int main(void)
 							Yn[fonte->x][nv+1] -= fonte->param1*cos(fonte->param6*M_PI/180) + I*fonte->param1*sin(fonte->param6*M_PI/180);
 						} else if (strcmp(fonte->tipo,"PULSE") == 0) {
 							Yn[fonte->x][nv+1] -= fonte->valor;
-							if (fonte->param2 > 0)
-								Yn[fonte->x][nv+1] -= I*fonte->param1;
-
 						} else {
 #ifdef DEBUG
 							printf("Tipo da fonte nao identificado\n");
@@ -782,8 +834,7 @@ int main(void)
 									if (strcmp(fonte->tipo,"SIN") == 0){
 										fasor = cabs(Yn[i][j])*sin(indiceHarmonicos*fonte->param2*2*M_PI*t + carg(Yn[i][j]));
 									}else if (strcmp(fonte->tipo,"PULSE") == 0){
-										tOff = fonte->param6 - fonte->param3 - fonte->param4 - fonte->param5;
-										fasor = cabs(Yn[i][j])*sin(indiceHarmonicos*(1/fonte->param6)*2*M_PI*(t+tOff) + carg(Yn[i][j]));
+										fasor = cabs(Yn[i][j])*cos(fonte->param2*2*M_PI*t + carg(Yn[i][j]));
 									}
 								}
 								Yt[i][j] += fasor;
@@ -802,6 +853,172 @@ int main(void)
 						getch();
 #endif
 					}
+
+					if (strcmp(fonte->tipo,"PULSE") ==0 && fonte->param2 >0) {
+
+					for (i=0; i<=nv; i++) {
+						for (j=0; j<=nv+1; j++)
+							Yn[i][j]=0;
+					}
+					/* Monta estampas */
+					for (i=1; i<=ne; i++) {
+						tipo=netlist[i].nome[0];
+						if (tipo == 'V' && i != indiceFonte) {
+							Yn[netlist[i].a][netlist[i].x]+=1;
+							Yn[netlist[i].b][netlist[i].x]-=1;
+							Yn[netlist[i].x][netlist[i].a]-=1;
+							Yn[netlist[i].x][netlist[i].b]+=1;
+							Yn[netlist[i].x][nv+1]-=0;
+						} else if (tipo == 'I'){
+							// do nothing
+						}
+						else if (tipo=='R') {
+							g=1/netlist[i].valor;
+							Yn[netlist[i].a][netlist[i].a]+=g;
+							Yn[netlist[i].b][netlist[i].b]+=g;
+							Yn[netlist[i].a][netlist[i].b]-=g;
+							Yn[netlist[i].b][netlist[i].a]-=g;
+						}
+
+						else if (tipo=='C'){
+							if (fonte->param2 == 0)
+								g = 1/ABERTO;
+							else
+								g=I * fonte->param2*2*M_PI * netlist[i].valor;
+
+							//printf("Capacitor - impedancia=%f + j%f\n",creal(g),cimag(g));
+							Yn[netlist[i].a][netlist[i].a]+=g;
+							Yn[netlist[i].b][netlist[i].b]+=g;
+							Yn[netlist[i].a][netlist[i].b]-=g;
+							Yn[netlist[i].b][netlist[i].a]-=g;
+						}
+						else if(tipo=='L'){
+							if (fonte->param2 == 0)
+								g=CURTO;
+							else
+								g=I * fonte->param2*2*M_PI * netlist[i].valor;
+
+							Yn[netlist[i].a][netlist[i].x]+=1;
+							Yn[netlist[i].b][netlist[i].x]-=1;
+							Yn[netlist[i].x][netlist[i].a]-=1;
+							Yn[netlist[i].x][netlist[i].b]+=1;
+							Yn[netlist[i].x][netlist[i].x]+=g;
+						}
+						else if (tipo == 'K'){
+							if (fonte->param2 == 0)
+								g=CURTO;
+							else
+								g=I * fonte->param2*2*M_PI * netlist[i].valor;
+
+							Yn[netlist[i].x][netlist[i].y]+=g;
+							Yn[netlist[i].y][netlist[i].x]+=g;
+						}
+						else if (tipo=='G') {
+							g=netlist[i].valor;
+							Yn[netlist[i].a][netlist[i].c]+=g;
+							Yn[netlist[i].b][netlist[i].d]+=g;
+							Yn[netlist[i].a][netlist[i].d]-=g;
+							Yn[netlist[i].b][netlist[i].c]-=g;
+						}
+						else if (tipo=='E') {
+							g=netlist[i].valor;
+							Yn[netlist[i].a][netlist[i].x]+=1;
+							Yn[netlist[i].b][netlist[i].x]-=1;
+							Yn[netlist[i].x][netlist[i].a]-=1;
+							Yn[netlist[i].x][netlist[i].b]+=1;
+							Yn[netlist[i].x][netlist[i].c]+=g;
+							Yn[netlist[i].x][netlist[i].d]-=g;
+						}
+						else if (tipo=='F') {
+							g=netlist[i].valor;
+							Yn[netlist[i].a][netlist[i].x]+=g;
+							Yn[netlist[i].b][netlist[i].x]-=g;
+							Yn[netlist[i].c][netlist[i].x]+=1;
+							Yn[netlist[i].d][netlist[i].x]-=1;
+							Yn[netlist[i].x][netlist[i].c]-=1;
+							Yn[netlist[i].x][netlist[i].d]+=1;
+						}
+						else if (tipo=='H') {
+							g=netlist[i].valor;
+							Yn[netlist[i].a][netlist[i].y]+=1;
+							Yn[netlist[i].b][netlist[i].y]-=1;
+							Yn[netlist[i].c][netlist[i].x]+=1;
+							Yn[netlist[i].d][netlist[i].x]-=1;
+							Yn[netlist[i].y][netlist[i].a]-=1;
+							Yn[netlist[i].y][netlist[i].b]+=1;
+							Yn[netlist[i].x][netlist[i].c]-=1;
+							Yn[netlist[i].x][netlist[i].d]+=1;
+							Yn[netlist[i].y][netlist[i].x]+=g;
+						}
+						else if (tipo=='O') {
+							Yn[netlist[i].a][netlist[i].x]+=1;
+							Yn[netlist[i].b][netlist[i].x]-=1;
+							Yn[netlist[i].x][netlist[i].c]+=1;
+							Yn[netlist[i].x][netlist[i].d]-=1;
+						}
+					}
+
+					if (fonte->nome[0] =='I') {
+						g=fonte->param1;
+						Yn[fonte->a][nv+1]-=g;
+						Yn[fonte->b][nv+1]+=g;
+					}
+					else if (fonte->nome[0] == 'V') {
+						Yn[fonte->a][fonte->x] += 1;
+						Yn[fonte->b][fonte->x] -= 1;
+						Yn[fonte->x][fonte->a] -= 1;
+						Yn[fonte->x][fonte->b] += 1;
+						Yn[fonte->x][nv+1] -= fonte->param1;
+					}
+#ifdef DEBUG
+					/* Opcional: Mostra o sistema apos a montagem da estampa */
+					//	printf("Sistema apos a estampa de %s\n",netlist[i].nome);
+					for (i=1; i<=nv; i++) {
+						for (j=1; j<=nv+1; j++)
+							if (cabs(Yn[i][j])!=0)
+								printf("%+3.1f + j%+3.1f ",creal(Yn[i][j]),cimag(Yn[i][j]));
+							else
+								printf(" ........... ");
+						printf("\n");
+					}
+#endif
+#if defined(_WIN32) && defined(DEBUG)
+					getch();
+#endif
+					/* Resolve o sistema */
+					// Se o sistema for singular para essa fonte, vamos ignorar sua contribuição na superposição.
+					if (resolversistema() == 0) {
+						/* Opcional: Mostra o sistema resolvido */
+#ifdef DEBUG
+						printf("Sistema resolvido:\n");
+#endif
+						float fasor;
+						double tOff;
+						for (i=1; i<=nv; i++) {
+							for (j=1; j<=nv+1; j++) {
+
+								fasor = cabs(Yn[i][j])*sin(fonte->param2*2*M_PI*t + carg(Yn[i][j]));
+
+								Yt[i][j] += fasor;
+#ifdef DEBUG
+								if (Yn[i][j]!=0)
+									printf("%+3.1f ",fasor);
+								else
+									printf(" ... ");
+#endif
+							}
+#ifdef DEBUG
+							printf("\n");
+#endif
+						}
+#if defined(_WIN32) && defined(DEBUG)
+						getch();
+#endif
+					}
+					}
+
+
+
 					free(fonte);
 				}
 			}
