@@ -108,10 +108,9 @@ nn, /* Nos */
 // Contadores do numero de fontes de tensão, indutores e transformadores
 indiceFontes,
 indiceIndutores=0,
-indiceTransformadores=0,
-repeatHarmonic = 0;
+indiceTransformadores=0;
 
-unsigned maxHarmonicos=15;
+unsigned maxHarmonicos=MAX_HARMONIC_LIMIT;
 
 int
 i, j, k;
@@ -762,13 +761,13 @@ int main(void)
 #ifdef DEBUG
 			printf("Iniciando varredura de harmonicos para a fonte %s, tipo %s\n",fontes[k]->nome,fontes[k]->tipo);
 #endif
-			for(indiceHarmonicos=0;indiceHarmonicos<maxHarmonicos;indiceHarmonicos++) {
+			for(indiceHarmonicos=0;indiceHarmonicos<=maxHarmonicos;indiceHarmonicos++) {
 				fonte=getHarmonic(fontes[k],indiceHarmonicos);
 				indiceFonte = fontes[k]->netlistIndex;
 				if (fonte==0) {
-#ifdef DEBUG
+//#ifdef DEBUG
 					printf("Nao ha mais harmonicos para essa fonte\n");
-#endif
+//#endif
 					break;
 				}else {
 #ifdef DEBUG
