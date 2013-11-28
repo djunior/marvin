@@ -51,15 +51,26 @@ SIN <nivel contínuo> <amplitude> <frequência (Hz)> <atraso*> <atenuação*> <ângul
 #include <stdio.h>
 
 //Include especifico para Windows
-#if defined(_WIN32)
-#include <conio.h>
-#endif
-
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <math.h>
 #include <complex.h>
+
+#ifdef _WIN32
+
+#include <conio.h>
+
+#else
+
+#include <time.h>
+clock_t startm, stopm;
+#define START if ( (startm = clock()) == -1) {printf("Error calling clock");exit(1);}
+#define STOP if ( (stopm = clock()) == -1) {printf("Error calling clock");exit(1);}
+#define PRINTTIME printf( "%6.3f seconds used by the processor.\n", ((double)stopm-startm)/CLOCKS_PER_SEC);
+
+#endif
+
 #define MAX_LINHA 80
 #define MAX_STR_LEN 80
 #define MAX_LINHA_EST 40
@@ -308,7 +319,7 @@ elemento* getHarmonic(elemento *fonte,int index) {
 //A saida e gravada na matrix y
 void montarEstampas(double complex y[MAX_NOS+1][MAX_NOS+2],elemento nList[],elemento *fonte){
 	double complex g;
-	//Zerando a matrix de saida
+	//Zerando a matrix de saida - Isso nao deve ser mais feito aqui, para melhorar a performance
 	for(i=0;i<=nv;i++)
 		for(j=0;j<=nv+1;j++)
 			y[i][j] = 0;
@@ -427,6 +438,8 @@ int main(void)
 
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&start);
+#else
+	START;
 #endif
 	setvbuf(stdout, NULL, _IONBF, 0);
 	setvbuf(stderr, NULL, _IONBF, 0);
@@ -737,6 +750,8 @@ int main(void)
 		for(i=0;i<=nv;i++)
 			for(j=0;j<=nv+1;j++)
 				Yt[i][j] = 0;
+//				Yn[i][j] = 0; // Iniciando primeiro valor da matrix parcial Yn
+
 
 		elemento *fonte;
 		int indiceFonte = 0;
@@ -785,7 +800,6 @@ int main(void)
 							Yn[fonte->x][nv+1] -= fonte->param1*cos(fonte->param6*M_PI/180) + I*fonte->param1*sin(fonte->param6*M_PI/180);
 						} else if (strcmp(fonte->tipo,"PULSE") == 0) {
 							Yn[fonte->x][nv+1] -= fonte->valor;
-							//* I*fonte->param1;
 						} else {
 #ifdef DEBUG
 							printf("Tipo da fonte nao identificado\n");
@@ -817,26 +831,28 @@ int main(void)
 						float fasor;
 						double tOff;
 						for (i=1; i<=nv; i++) {
-							for (j=1; j<=nv+1; j++) {
+//							for (j=1; j<=nv+1; j++) {
 
 								if (fonte->param2 == 0)
-									fasor = creal(Yn[i][j]);
+									fasor = creal(Yn[i][nv+1]);
 								else {
 									if (strcmp(fonte->tipo,"SIN") == 0){
-										fasor = cabs(Yn[i][j])*sin(indiceHarmonicos*fonte->param2*2*M_PI*t + carg(Yn[i][j]));
+										fasor = cabs(Yn[i][nv+1])*sin(indiceHarmonicos*fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]));
 									}else if (strcmp(fonte->tipo,"PULSE") == 0){
 										//fonte->param2 ja inclui o indice do harmonico
-										fasor = cabs(Yn[i][j])*cos(fonte->param2*2*M_PI*t + carg(Yn[i][j]));
+										fasor = cabs(Yn[i][nv+1])*cos(fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]));
 									}
 								}
-								Yt[i][j] += fasor;
+								Yt[i][nv+1] += fasor;
+								//Zerando Yn para deixa-lo pronto para a proxima analise
+//								Yn[i][nv+1] = 0;
 #ifdef DEBUG
-								if (Yn[i][j]!=0)
+								if (Yn[i][nv+1]!=0)
 									printf("%+3.1f ",fasor);
 								else
 									printf(" ... ");
 #endif
-							}
+//							}
 #ifdef DEBUG
 							printf("\n");
 #endif
@@ -847,66 +863,70 @@ int main(void)
 					}
 
 					if (strcmp(fonte->tipo,"PULSE") ==0 && fonte->param2 >0) {
+						for (i=1; i<=nv; i++)
+							for (j=1; j<=nv+1; j++)
+								Yn[i][j] = 0;
 
-					montarEstampas(Yn,netlist,fonte);
+						montarEstampas(Yn,netlist,fonte);
 
-					if (fonte->nome[0] =='I') {
-						g=fonte->param1;
-						Yn[fonte->a][nv+1]-=g;
-						Yn[fonte->b][nv+1]+=g;
-					}
-					else if (fonte->nome[0] == 'V') {
-						Yn[fonte->a][fonte->x] += 1;
-						Yn[fonte->b][fonte->x] -= 1;
-						Yn[fonte->x][fonte->a] -= 1;
-						Yn[fonte->x][fonte->b] += 1;
-						Yn[fonte->x][nv+1] -= fonte->param1;
-					}
-#ifdef DEBUG
-					/* Opcional: Mostra o sistema apos a montagem da estampa */
-					//	printf("Sistema apos a estampa de %s\n",netlist[i].nome);
-					for (i=1; i<=nv; i++) {
-						for (j=1; j<=nv+1; j++)
-							if (cabs(Yn[i][j])!=0)
-								printf("%+3.1f + j%+3.1f ",creal(Yn[i][j]),cimag(Yn[i][j]));
-							else
-								printf(" ........... ");
-						printf("\n");
-					}
-#endif
-#if defined(_WIN32) && defined(DEBUG)
-					getch();
-#endif
-					/* Resolve o sistema */
-					// Se o sistema for singular para essa fonte, vamos ignorar sua contribuição na superposição.
-					if (resolversistema() == 0) {
-						/* Opcional: Mostra o sistema resolvido */
-#ifdef DEBUG
-						printf("Sistema resolvido:\n");
-#endif
-						float fasor;
-						double tOff;
-						for (i=1; i<=nv; i++) {
-							for (j=1; j<=nv+1; j++) {
-
-								fasor = cabs(Yn[i][j])*sin(fonte->param2*2*M_PI*t + carg(Yn[i][j]));
-
-								Yt[i][j] += fasor;
-#ifdef DEBUG
-								if (Yn[i][j]!=0)
-									printf("%+3.1f ",fasor);
-								else
-									printf(" ... ");
-#endif
-							}
-#ifdef DEBUG
-							printf("\n");
-#endif
+						if (fonte->nome[0] =='I') {
+							g=fonte->param1;
+							Yn[fonte->a][nv+1]-=g;
+							Yn[fonte->b][nv+1]+=g;
 						}
+						else if (fonte->nome[0] == 'V') {
+							Yn[fonte->a][fonte->x] += 1;
+							Yn[fonte->b][fonte->x] -= 1;
+							Yn[fonte->x][fonte->a] -= 1;
+							Yn[fonte->x][fonte->b] += 1;
+							Yn[fonte->x][nv+1] -= fonte->param1;
+						}
+#ifdef DEBUG
+						/* Opcional: Mostra o sistema apos a montagem da estampa */
+						//	printf("Sistema apos a estampa de %s\n",netlist[i].nome);
+						for (i=1; i<=nv; i++) {
+							for (j=1; j<=nv+1; j++)
+								if (cabs(Yn[i][j])!=0)
+									printf("%+3.1f + j%+3.1f ",creal(Yn[i][j]),cimag(Yn[i][j]));
+								else
+									printf(" ........... ");
+							printf("\n");
+						}
+#endif
 #if defined(_WIN32) && defined(DEBUG)
 						getch();
 #endif
-					}
+						/* Resolve o sistema */
+						// Se o sistema for singular para essa fonte, vamos ignorar sua contribuição na superposição.
+						if (resolversistema() == 0) {
+							/* Opcional: Mostra o sistema resolvido */
+#ifdef DEBUG
+							printf("Sistema resolvido:\n");
+#endif
+							float fasor;
+							double tOff;
+							for (i=1; i<=nv; i++) {
+//								for (j=1; j<=nv+1; j++) {
+
+									fasor = cabs(Yn[i][nv+1])*sin(fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]));
+
+									Yt[i][nv+1] += fasor;
+//									Yn[i][nv+1] = 0;
+#ifdef DEBUG
+									if (Yn[i][nv+1]!=0)
+										printf("%+3.1f ",fasor);
+									else
+										printf(" ... ");
+#endif
+//								}
+#ifdef DEBUG
+								printf("\n");
+#endif
+							}
+#if defined(_WIN32) && defined(DEBUG)
+							getch();
+#endif
+						}
 					}
 
 
@@ -952,6 +972,9 @@ int main(void)
     interval = (double) (end.QuadPart - start.QuadPart) / frequency.QuadPart;
 
     printf("Tempo de execução: %f\n", interval);
+#else
+    STOP;
+    PRINTTIME;
 #endif
 
 	return 0;
