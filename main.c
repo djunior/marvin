@@ -51,15 +51,24 @@ SIN <nivel contínuo> <amplitude> <frequência (Hz)> <atraso*> <atenuação*> <ângul
 #include <stdio.h>
 
 //Include especifico para Windows
-#if defined(_WIN32)
-#include <conio.h>
-#endif
-
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <math.h>
 #include <complex.h>
+
+#ifdef _WIN32
+
+#include <conio.h>
+
+#endif
+
+#include <time.h>
+clock_t startm, stopm;
+#define START if ( (startm = clock()) == -1) {printf("Error calling clock");exit(1);}
+#define STOP if ( (stopm = clock()) == -1) {printf("Error calling clock");exit(1);}
+#define PRINTTIME printf( "%6.3f seconds used by the processor.\n", ((double)stopm-startm)/CLOCKS_PER_SEC);
+
 #define MAX_LINHA 80
 #define MAX_STR_LEN 80
 #define MAX_LINHA_EST 40
@@ -100,7 +109,7 @@ indiceIndutores=0,
 indiceTransformadores=0,
 repeatHarmonic = 0;
 
-unsigned maxHarmonicos=15;
+unsigned maxHarmonicos=MAX_HARMONIC_LIMIT;
 
 int
 i, j, k;
@@ -304,9 +313,123 @@ elemento* getHarmonic(elemento *fonte,int index) {
 	return ret;
 }
 
+//Monta as estampas dos elementos definidos em nList com a fonte selecionada no ponteiro "fonte"
+//A saida e gravada na matrix y
+void montarEstampas(double complex y[MAX_NOS+1][MAX_NOS+2],elemento nList[],elemento *fonte){
+	double complex g;
+	//Zerando a matrix de saida - Isso nao deve ser mais feito aqui, para melhorar a performance
+	for(i=0;i<=nv;i++)
+		for(j=0;j<=nv+1;j++)
+			y[i][j] = 0;
+
+	int indiceFonte = fonte->netlistIndex;
+	for (i=0; i<=nv; i++) {
+		for (j=0; j<=nv+1; j++)
+			y[i][j]=0;
+	}
+	/* Monta estampas */
+	for (i=1; i<=ne; i++) {
+		tipo=nList[i].nome[0];
+		if (tipo == 'V' && i != indiceFonte) {
+			y[nList[i].a][nList[i].x]+=1;
+			y[nList[i].b][nList[i].x]-=1;
+			y[nList[i].x][nList[i].a]-=1;
+			y[nList[i].x][nList[i].b]+=1;
+			y[nList[i].x][nv+1]-=0;
+		} else if (tipo == 'I'){
+			//fonte de correte 0 = circuito aberto, nao e necessario adicionar na matrix
+		}
+		else if (tipo=='R') {
+			g=1/nList[i].valor;
+			y[nList[i].a][nList[i].a]+=g;
+			y[nList[i].b][nList[i].b]+=g;
+			y[nList[i].a][nList[i].b]-=g;
+			y[nList[i].b][nList[i].a]-=g;
+		}
+
+		else if (tipo=='C'){
+			if (fonte->param2 == 0)
+				g = 1/ABERTO;
+			else
+				g=I * fonte->param2*2*M_PI * nList[i].valor;
+
+			y[nList[i].a][nList[i].a]+=g;
+			y[nList[i].b][nList[i].b]+=g;
+			y[nList[i].a][nList[i].b]-=g;
+			y[nList[i].b][nList[i].a]-=g;
+		}
+		else if(tipo=='L'){
+			if (fonte->param2 == 0)
+				g=CURTO;
+			else
+				g=I * fonte->param2*2*M_PI * nList[i].valor;
+
+			y[nList[i].a][nList[i].x]+=1;
+			y[nList[i].b][nList[i].x]-=1;
+			y[nList[i].x][nList[i].a]-=1;
+			y[nList[i].x][nList[i].b]+=1;
+			y[nList[i].x][nList[i].x]+=g;
+		}
+		else if (tipo == 'K'){
+			if (fonte->param2 == 0)
+				g=CURTO;
+			else
+				g=I * fonte->param2*2*M_PI * nList[i].valor;
+
+			y[nList[i].x][nList[i].y]+=g;
+			y[nList[i].y][nList[i].x]+=g;
+		}
+		else if (tipo=='G') {
+			g=nList[i].valor;
+			y[nList[i].a][nList[i].c]+=g;
+			y[nList[i].b][nList[i].d]+=g;
+			y[nList[i].a][nList[i].d]-=g;
+			y[nList[i].b][nList[i].c]-=g;
+		}
+		else if (tipo=='E') {
+			g=nList[i].valor;
+			y[nList[i].a][nList[i].x]+=1;
+			y[nList[i].b][nList[i].x]-=1;
+			y[nList[i].x][nList[i].a]-=1;
+			y[nList[i].x][nList[i].b]+=1;
+			y[nList[i].x][nList[i].c]+=g;
+			y[nList[i].x][nList[i].d]-=g;
+		}
+		else if (tipo=='F') {
+			g=nList[i].valor;
+			y[nList[i].a][nList[i].x]+=g;
+			y[nList[i].b][nList[i].x]-=g;
+			y[nList[i].c][nList[i].x]+=1;
+			y[nList[i].d][nList[i].x]-=1;
+			y[nList[i].x][nList[i].c]-=1;
+			y[nList[i].x][nList[i].d]+=1;
+		}
+		else if (tipo=='H') {
+			g=nList[i].valor;
+			y[nList[i].a][nList[i].y]+=1;
+			y[nList[i].b][nList[i].y]-=1;
+			y[nList[i].c][nList[i].x]+=1;
+			y[nList[i].d][nList[i].x]-=1;
+			y[nList[i].y][nList[i].a]-=1;
+			y[nList[i].y][nList[i].b]+=1;
+			y[nList[i].x][nList[i].c]-=1;
+			y[nList[i].x][nList[i].d]+=1;
+			y[nList[i].y][nList[i].x]+=g;
+		}
+		else if (tipo=='O') {
+			y[nList[i].a][nList[i].x]+=1;
+			y[nList[i].b][nList[i].x]-=1;
+			y[nList[i].x][nList[i].c]+=1;
+			y[nList[i].x][netlist[i].d]-=1;
+		}
+	}
+}
 
 int main(void)
 {
+
+	START; // Medidor de performance
+
 	setvbuf(stdout, NULL, _IONBF, 0);
 	setvbuf(stderr, NULL, _IONBF, 0);
 	unsigned indice,indiceHarmonicos;
@@ -616,6 +739,8 @@ int main(void)
 		for(i=0;i<=nv;i++)
 			for(j=0;j<=nv+1;j++)
 				Yt[i][j] = 0;
+//				Yn[i][j] = 0; // Iniciando primeiro valor da matrix parcial Yn
+
 
 		elemento *fonte;
 		int indiceFonte = 0;
@@ -626,119 +751,20 @@ int main(void)
 #ifdef DEBUG
 			printf("Iniciando varredura de harmonicos para a fonte %s, tipo %s\n",fontes[k]->nome,fontes[k]->tipo);
 #endif
-			for(indiceHarmonicos=0;indiceHarmonicos<maxHarmonicos;indiceHarmonicos++) {
+			for(indiceHarmonicos=0;indiceHarmonicos<=maxHarmonicos;indiceHarmonicos++) {
 				fonte=getHarmonic(fontes[k],indiceHarmonicos);
 				indiceFonte = fontes[k]->netlistIndex;
 				if (fonte==0) {
-#ifdef DEBUG
+//#ifdef DEBUG
 					printf("Nao ha mais harmonicos para essa fonte\n");
-#endif
+//#endif
+					break;
 				}else {
 #ifdef DEBUG
 					printf("Montando matriz de analise nodal para o harmonico indice %i\n",indiceHarmonicos);
 #endif
-					for (i=0; i<=nv; i++) {
-						for (j=0; j<=nv+1; j++)
-							Yn[i][j]=0;
-					}
-					/* Monta estampas */
-					for (i=1; i<=ne; i++) {
-						tipo=netlist[i].nome[0];
-						if (tipo == 'V' && i != indiceFonte) {
-							Yn[netlist[i].a][netlist[i].x]+=1;
-							Yn[netlist[i].b][netlist[i].x]-=1;
-							Yn[netlist[i].x][netlist[i].a]-=1;
-							Yn[netlist[i].x][netlist[i].b]+=1;
-							Yn[netlist[i].x][nv+1]-=0;
-						} else if (tipo == 'I'){
-							// do nothing
-						}
-						else if (tipo=='R') {
-							g=1/netlist[i].valor;
-							Yn[netlist[i].a][netlist[i].a]+=g;
-							Yn[netlist[i].b][netlist[i].b]+=g;
-							Yn[netlist[i].a][netlist[i].b]-=g;
-							Yn[netlist[i].b][netlist[i].a]-=g;
-						}
 
-						else if (tipo=='C'){
-							if (fonte->param2 == 0)
-								g = 1/ABERTO;
-							else
-								g=I * fonte->param2*2*M_PI * netlist[i].valor;
-
-							//printf("Capacitor - impedancia=%f + j%f\n",creal(g),cimag(g));
-							Yn[netlist[i].a][netlist[i].a]+=g;
-							Yn[netlist[i].b][netlist[i].b]+=g;
-							Yn[netlist[i].a][netlist[i].b]-=g;
-							Yn[netlist[i].b][netlist[i].a]-=g;
-						}
-						else if(tipo=='L'){
-							if (fonte->param2 == 0)
-								g=CURTO;
-							else
-								g=I * fonte->param2*2*M_PI * netlist[i].valor;
-
-							Yn[netlist[i].a][netlist[i].x]+=1;
-							Yn[netlist[i].b][netlist[i].x]-=1;
-							Yn[netlist[i].x][netlist[i].a]-=1;
-							Yn[netlist[i].x][netlist[i].b]+=1;
-							Yn[netlist[i].x][netlist[i].x]+=g;
-						}
-						else if (tipo == 'K'){
-							if (fonte->param2 == 0)
-								g=CURTO;
-							else
-								g=I * fonte->param2*2*M_PI * netlist[i].valor;
-
-							Yn[netlist[i].x][netlist[i].y]+=g;
-							Yn[netlist[i].y][netlist[i].x]+=g;
-						}
-						else if (tipo=='G') {
-							g=netlist[i].valor;
-							Yn[netlist[i].a][netlist[i].c]+=g;
-							Yn[netlist[i].b][netlist[i].d]+=g;
-							Yn[netlist[i].a][netlist[i].d]-=g;
-							Yn[netlist[i].b][netlist[i].c]-=g;
-						}
-						else if (tipo=='E') {
-							g=netlist[i].valor;
-							Yn[netlist[i].a][netlist[i].x]+=1;
-							Yn[netlist[i].b][netlist[i].x]-=1;
-							Yn[netlist[i].x][netlist[i].a]-=1;
-							Yn[netlist[i].x][netlist[i].b]+=1;
-							Yn[netlist[i].x][netlist[i].c]+=g;
-							Yn[netlist[i].x][netlist[i].d]-=g;
-						}
-						else if (tipo=='F') {
-							g=netlist[i].valor;
-							Yn[netlist[i].a][netlist[i].x]+=g;
-							Yn[netlist[i].b][netlist[i].x]-=g;
-							Yn[netlist[i].c][netlist[i].x]+=1;
-							Yn[netlist[i].d][netlist[i].x]-=1;
-							Yn[netlist[i].x][netlist[i].c]-=1;
-							Yn[netlist[i].x][netlist[i].d]+=1;
-						}
-						else if (tipo=='H') {
-							g=netlist[i].valor;
-							Yn[netlist[i].a][netlist[i].y]+=1;
-							Yn[netlist[i].b][netlist[i].y]-=1;
-							Yn[netlist[i].c][netlist[i].x]+=1;
-							Yn[netlist[i].d][netlist[i].x]-=1;
-							Yn[netlist[i].y][netlist[i].a]-=1;
-							Yn[netlist[i].y][netlist[i].b]+=1;
-							Yn[netlist[i].x][netlist[i].c]-=1;
-							Yn[netlist[i].x][netlist[i].d]+=1;
-							Yn[netlist[i].y][netlist[i].x]+=g;
-						}
-						else if (tipo=='O') {
-							Yn[netlist[i].a][netlist[i].x]+=1;
-							Yn[netlist[i].b][netlist[i].x]-=1;
-							Yn[netlist[i].x][netlist[i].c]+=1;
-							Yn[netlist[i].x][netlist[i].d]-=1;
-						}
-					}
-
+					montarEstampas(Yn,netlist,fonte);
 					if (fonte->nome[0] =='I') {
 						if (strcmp(fonte->tipo,"DC") == 0)
 							g=fonte->valor;
@@ -746,7 +772,6 @@ int main(void)
 							g=fonte->param1*cos(fonte->param6*M_PI/180) + I*fonte->param1*sin(fonte->param6*M_PI/180);
 						else if (strcmp(fonte->tipo,"PULSE") == 0)
 							g=fonte->valor;
-
 						Yn[fonte->a][nv+1]-=g;
 						Yn[fonte->b][nv+1]+=g;
 					}
@@ -792,26 +817,28 @@ int main(void)
 						float fasor;
 						double tOff;
 						for (i=1; i<=nv; i++) {
-							for (j=1; j<=nv+1; j++) {
+//							for (j=1; j<=nv+1; j++) {
 
 								if (fonte->param2 == 0)
-									fasor = creal(Yn[i][j]);
+									fasor = creal(Yn[i][nv+1]);
 								else {
 									if (strcmp(fonte->tipo,"SIN") == 0){
-										fasor = cabs(Yn[i][j])*sin(indiceHarmonicos*fonte->param2*2*M_PI*t + carg(Yn[i][j]));
+										fasor = cabs(Yn[i][nv+1])*sin(indiceHarmonicos*fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]));
 									}else if (strcmp(fonte->tipo,"PULSE") == 0){
-										//fonte->param2 j‡ inclui o indice do harmonico
-										fasor = cabs(Yn[i][j])*cos(fonte->param2*2*M_PI*t + carg(Yn[i][j]));
+										//fonte->param2 ja inclui o indice do harmonico
+										fasor = cabs(Yn[i][nv+1])*cos(fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]));
 									}
 								}
-								Yt[i][j] += fasor;
+								Yt[i][nv+1] += fasor;
+								//Zerando Yn para deixa-lo pronto para a proxima analise
+//								Yn[i][nv+1] = 0;
 #ifdef DEBUG
-								if (Yn[i][j]!=0)
+								if (Yn[i][nv+1]!=0)
 									printf("%+3.1f ",fasor);
 								else
 									printf(" ... ");
 #endif
-							}
+//							}
 #ifdef DEBUG
 							printf("\n");
 #endif
@@ -822,169 +849,71 @@ int main(void)
 					}
 
 					if (strcmp(fonte->tipo,"PULSE") ==0 && fonte->param2 >0) {
+						for (i=1; i<=nv; i++)
+							for (j=1; j<=nv+1; j++)
+								Yn[i][j] = 0;
 
-					for (i=0; i<=nv; i++) {
-						for (j=0; j<=nv+1; j++)
-							Yn[i][j]=0;
-					}
-					/* Monta estampas */
-					for (i=1; i<=ne; i++) {
-						tipo=netlist[i].nome[0];
-						if (tipo == 'V' && i != indiceFonte) {
-							Yn[netlist[i].a][netlist[i].x]+=1;
-							Yn[netlist[i].b][netlist[i].x]-=1;
-							Yn[netlist[i].x][netlist[i].a]-=1;
-							Yn[netlist[i].x][netlist[i].b]+=1;
-							Yn[netlist[i].x][nv+1]-=0;
-						} else if (tipo == 'I'){
-							// do nothing
-						}
-						else if (tipo=='R') {
-							g=1/netlist[i].valor;
-							Yn[netlist[i].a][netlist[i].a]+=g;
-							Yn[netlist[i].b][netlist[i].b]+=g;
-							Yn[netlist[i].a][netlist[i].b]-=g;
-							Yn[netlist[i].b][netlist[i].a]-=g;
-						}
+						montarEstampas(Yn,netlist,fonte);
 
-						else if (tipo=='C'){
-							if (fonte->param2 == 0)
-								g = 1/ABERTO;
-							else
-								g=I * fonte->param2*2*M_PI * netlist[i].valor;
-
-							//printf("Capacitor - impedancia=%f + j%f\n",creal(g),cimag(g));
-							Yn[netlist[i].a][netlist[i].a]+=g;
-							Yn[netlist[i].b][netlist[i].b]+=g;
-							Yn[netlist[i].a][netlist[i].b]-=g;
-							Yn[netlist[i].b][netlist[i].a]-=g;
+						if (fonte->nome[0] =='I') {
+							g=fonte->param1;
+							Yn[fonte->a][nv+1]-=g;
+							Yn[fonte->b][nv+1]+=g;
 						}
-						else if(tipo=='L'){
-							if (fonte->param2 == 0)
-								g=CURTO;
-							else
-								g=I * fonte->param2*2*M_PI * netlist[i].valor;
-
-							Yn[netlist[i].a][netlist[i].x]+=1;
-							Yn[netlist[i].b][netlist[i].x]-=1;
-							Yn[netlist[i].x][netlist[i].a]-=1;
-							Yn[netlist[i].x][netlist[i].b]+=1;
-							Yn[netlist[i].x][netlist[i].x]+=g;
+						else if (fonte->nome[0] == 'V') {
+							Yn[fonte->a][fonte->x] += 1;
+							Yn[fonte->b][fonte->x] -= 1;
+							Yn[fonte->x][fonte->a] -= 1;
+							Yn[fonte->x][fonte->b] += 1;
+							Yn[fonte->x][nv+1] -= fonte->param1;
 						}
-						else if (tipo == 'K'){
-							if (fonte->param2 == 0)
-								g=CURTO;
-							else
-								g=I * fonte->param2*2*M_PI * netlist[i].valor;
-
-							Yn[netlist[i].x][netlist[i].y]+=g;
-							Yn[netlist[i].y][netlist[i].x]+=g;
-						}
-						else if (tipo=='G') {
-							g=netlist[i].valor;
-							Yn[netlist[i].a][netlist[i].c]+=g;
-							Yn[netlist[i].b][netlist[i].d]+=g;
-							Yn[netlist[i].a][netlist[i].d]-=g;
-							Yn[netlist[i].b][netlist[i].c]-=g;
-						}
-						else if (tipo=='E') {
-							g=netlist[i].valor;
-							Yn[netlist[i].a][netlist[i].x]+=1;
-							Yn[netlist[i].b][netlist[i].x]-=1;
-							Yn[netlist[i].x][netlist[i].a]-=1;
-							Yn[netlist[i].x][netlist[i].b]+=1;
-							Yn[netlist[i].x][netlist[i].c]+=g;
-							Yn[netlist[i].x][netlist[i].d]-=g;
-						}
-						else if (tipo=='F') {
-							g=netlist[i].valor;
-							Yn[netlist[i].a][netlist[i].x]+=g;
-							Yn[netlist[i].b][netlist[i].x]-=g;
-							Yn[netlist[i].c][netlist[i].x]+=1;
-							Yn[netlist[i].d][netlist[i].x]-=1;
-							Yn[netlist[i].x][netlist[i].c]-=1;
-							Yn[netlist[i].x][netlist[i].d]+=1;
-						}
-						else if (tipo=='H') {
-							g=netlist[i].valor;
-							Yn[netlist[i].a][netlist[i].y]+=1;
-							Yn[netlist[i].b][netlist[i].y]-=1;
-							Yn[netlist[i].c][netlist[i].x]+=1;
-							Yn[netlist[i].d][netlist[i].x]-=1;
-							Yn[netlist[i].y][netlist[i].a]-=1;
-							Yn[netlist[i].y][netlist[i].b]+=1;
-							Yn[netlist[i].x][netlist[i].c]-=1;
-							Yn[netlist[i].x][netlist[i].d]+=1;
-							Yn[netlist[i].y][netlist[i].x]+=g;
-						}
-						else if (tipo=='O') {
-							Yn[netlist[i].a][netlist[i].x]+=1;
-							Yn[netlist[i].b][netlist[i].x]-=1;
-							Yn[netlist[i].x][netlist[i].c]+=1;
-							Yn[netlist[i].x][netlist[i].d]-=1;
-						}
-					}
-
-					if (fonte->nome[0] =='I') {
-						g=fonte->param1;
-						Yn[fonte->a][nv+1]-=g;
-						Yn[fonte->b][nv+1]+=g;
-					}
-					else if (fonte->nome[0] == 'V') {
-						Yn[fonte->a][fonte->x] += 1;
-						Yn[fonte->b][fonte->x] -= 1;
-						Yn[fonte->x][fonte->a] -= 1;
-						Yn[fonte->x][fonte->b] += 1;
-						Yn[fonte->x][nv+1] -= fonte->param1;
-					}
 #ifdef DEBUG
-					/* Opcional: Mostra o sistema apos a montagem da estampa */
-					//	printf("Sistema apos a estampa de %s\n",netlist[i].nome);
-					for (i=1; i<=nv; i++) {
-						for (j=1; j<=nv+1; j++)
-							if (cabs(Yn[i][j])!=0)
-								printf("%+3.1f + j%+3.1f ",creal(Yn[i][j]),cimag(Yn[i][j]));
-							else
-								printf(" ........... ");
-						printf("\n");
-					}
-#endif
-#if defined(_WIN32) && defined(DEBUG)
-					getch();
-#endif
-					/* Resolve o sistema */
-					// Se o sistema for singular para essa fonte, vamos ignorar sua contribuição na superposição.
-					if (resolversistema() == 0) {
-						/* Opcional: Mostra o sistema resolvido */
-#ifdef DEBUG
-						printf("Sistema resolvido:\n");
-#endif
-						float fasor;
-						double tOff;
+						/* Opcional: Mostra o sistema apos a montagem da estampa */
+						//	printf("Sistema apos a estampa de %s\n",netlist[i].nome);
 						for (i=1; i<=nv; i++) {
-							for (j=1; j<=nv+1; j++) {
-
-								fasor = cabs(Yn[i][j])*sin(fonte->param2*2*M_PI*t + carg(Yn[i][j]));
-
-								Yt[i][j] += fasor;
-#ifdef DEBUG
-								if (Yn[i][j]!=0)
-									printf("%+3.1f ",fasor);
+							for (j=1; j<=nv+1; j++)
+								if (cabs(Yn[i][j])!=0)
+									printf("%+3.1f + j%+3.1f ",creal(Yn[i][j]),cimag(Yn[i][j]));
 								else
-									printf(" ... ");
-#endif
-							}
-#ifdef DEBUG
+									printf(" ........... ");
 							printf("\n");
-#endif
 						}
+#endif
 #if defined(_WIN32) && defined(DEBUG)
 						getch();
 #endif
-					}
-					}
+						/* Resolve o sistema */
+						// Se o sistema for singular para essa fonte, vamos ignorar sua contribuição na superposição.
+						if (resolversistema() == 0) {
+							/* Opcional: Mostra o sistema resolvido */
+#ifdef DEBUG
+							printf("Sistema resolvido:\n");
+#endif
+							float fasor;
+							double tOff;
+							for (i=1; i<=nv; i++) {
+//								for (j=1; j<=nv+1; j++) {
 
+									fasor = cabs(Yn[i][nv+1])*sin(fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]));
 
+									Yt[i][nv+1] += fasor;
+//									Yn[i][nv+1] = 0;
+#ifdef DEBUG
+									if (Yn[i][nv+1]!=0)
+										printf("%+3.1f ",fasor);
+									else
+										printf(" ... ");
+#endif
+//								}
+#ifdef DEBUG
+								printf("\n");
+#endif
+							}
+#if defined(_WIN32) && defined(DEBUG)
+							getch();
+#endif
+						}
+					}
 
 					free(fonte);
 				}
@@ -1020,7 +949,12 @@ int main(void)
 	}while(t<tempoFinal);
 
 	fclose(outputFile);
-	printf("Analise concluida. O resultado está salvo no arquivo %s\n",outputFilename);
+	printf("Analise concluida. O resultado esta salvo no arquivo %s\n",outputFilename);
+
+	// Finaliza a medicao de performance e exibe na tela
+    STOP;
+    PRINTTIME;
+
 	return 0;
 }
 
