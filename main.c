@@ -257,30 +257,38 @@ elemento* getHarmonic(elemento *fonte,int index) {
 
 		double max = fonte->param1;
 		double min = fonte->valor;
-		double atraso = fonte->param2;
+//		double atraso = fonte->param2; //nao utilizado
 		double tRise = fonte->param3;
 		double tFall = fonte->param4;
 		double tOn = fonte->param5;
 		double period = fonte->param6;
-		double tOff = period - (tRise + tOn + tFall);
+//		double numCycles = fonte->param7; // nao utilizado
+//		double tOff = period - (tRise + tOn + tFall); // nao utilizado
+
+		double w = 2*M_PI*index/period;
+		double t1 = tRise;
+		double t2 = tRise + tOn;
+		double t3 = tRise + tOn + tFall;
+		double t4 = period;
 
 		if (index == 0) {
-			ret->valor = min + tOn*(max-min)/period;
+			ret->valor = ( max*(t2 - t1) + min*(t4-t3))/period;
+
+			if (tRise != 0)
+				ret->valor += (min*t1 + t1*(max-min)/2)/period;
+
+			if (tFall != 0) {
+				double a = (max-min)/(t2-t3);
+				double b = (min*t2 - max*t3)/(t2-t3);
+				ret->valor += ( (a/2)*(pow(t3,2) - pow(t2,2)) + b*(t3 - t2) )/period;
+			}
+
 			strcpy(ret->tipo,"DC");
 			return ret;
 		} else {
-			double w = 2*M_PI*index/period;
-			double t1 = tRise;
-			double t2 = tRise + tOn;
-			double t3 = tRise + tOn + tFall;
-			double t4 = period;
-
 			if (tRise ==0 && tFall == 0) {
-
 				ret->valor = (2/period) * ((max-min)/w) * sin(w*tOn);
-
 				ret->param1 = (2/period) * ((max-min)/w) * (1 - cos(w*tOn));
-
 			} else {
 				double a = (max-min)/(t2-t3);
 				double b = (min*t2 - max*t3)/(t2-t3);
@@ -443,7 +451,7 @@ int main(void)
 	denovo:
 	/* Leitura do netlist */
 	ne=0; nv=0; indiceFontes=0; strcpy(lista[0],"0");
-	printf("Nome do arquivo com o netlist (ex: mna.net): ");
+	printf("Nome do arquivo com o netlist (ex: mna.net):\n");
 	scanf("%50s",nomearquivo);
 	arquivo=fopen(nomearquivo,"r");
 	if (arquivo==0) {
@@ -455,9 +463,11 @@ int main(void)
 	strncpy(outputFilename,nomearquivo,strlen(nomearquivo)-3);
 	//Adicionando a extensão tab ao nome do arquivo de saida
 	strcat(outputFilename,"tab");
-	printf("Lendo netlist:\n");
 	fgets(txt,MAX_LINHA,arquivo);
+#ifdef DEBUG
+	printf("Lendo netlist:\n");
 	printf("Titulo: %s",txt);
+#endif
 	while (fgets(txt,MAX_LINHA,arquivo)) {
 		ne++; /* Nao usa o netlist[0] */
 		if (ne>MAX_ELEM) {
@@ -501,9 +511,6 @@ int main(void)
 			else if (tipo=='I' || tipo == 'V'){
 				if (indice<4) {
 					printf("Numero de parametros incorreto para a Fonte %s\n", netlistParams[0]);
-#if defined(_WIN32) && defined(DEBUG)
-					getch();
-#endif
 					exit(1);
 				}
 				strcpy(netlist[ne].nome,netlistParams[0]);
@@ -579,7 +586,7 @@ int main(void)
 #endif
 			}
 			else if (tipo=='K') {
-				elemento *L1,*L2 = 0;
+				elemento *L1 = 0,*L2 = 0;
 				for (i=0;i<indiceIndutores;i++) {
 					if (L1 == 0 || L2 == 0) {
 						if (strcmp(indutores[i]->nome,netlistParams[1]) == 0)
@@ -626,13 +633,12 @@ int main(void)
 					//O harmonico e configurado para cada fonte
 					maxHarmonicosNetlist = -1;
 				}
+#ifdef DEBUG
 				printf("Tempo de simulacao: %g\nPasso=%g\nNumero de harmonicos=%g\n",tempoFinal,passo,maxHarmonicosNetlist);
+#endif
 			}
 			else {
 				printf("Elemento desconhecido: %s\n",txt);
-#if defined(_WIN32) && defined(DEBUG)
-				getch();
-#endif
 				exit(1);
 			}
 
@@ -679,16 +685,11 @@ int main(void)
 
 #ifdef DEBUG
 
-#ifdef _WIN32
-	getch();
-#endif
 	/* Lista tudo */
 	printf("Variaveis internas: \n");
 	for (i=0; i<=nv; i++)
 		printf("%d -> %s\n",i,lista[i]);
-#ifdef _WIN32
-	getch();
-#endif
+
 	printf("Netlist interno final\n");
 	for (i=1; i<=ne; i++) {
 		tipo=netlist[i].nome[0];
@@ -706,21 +707,14 @@ int main(void)
 		else if (tipo=='H')
 			printf("Correntes jx e jy: %d, %d\n",netlist[i].x,netlist[i].y);
 	}
-#ifdef _WIN32
-	getch();
-#endif
+
 	/* Monta o sistema nodal modificado */
 
 	printf("O circuito tem %d nos, %d variaveis e %d elementos\n",nn,nv,ne);
 
 
-#ifdef _WIN32
-	getch();
-#endif
-
 #endif
 	/* Zera sistema */
-	LAP;
 
 	//lista[i]
 	// Escrevendo header do arquivo
@@ -742,7 +736,6 @@ int main(void)
 		for(i=0;i<=nv;i++)
 			for(j=0;j<=nv+1;j++)
 				Yt[i][j] = 0;
-//				Yn[i][j] = 0; // Iniciando primeiro valor da matrix parcial Yn
 
 #ifdef DEBUG
 		printf("Iniciando varredura de fontes\n");
@@ -761,6 +754,9 @@ int main(void)
 				} else {
 					maxHarmonicos = 1/(2*passo*fontes[k]->param2);
 				}
+#ifdef DEBUG
+				printf("Calculando fonte %s utilizando %g harmonicos\n",fontes[k]->nome,maxHarmonicos);
+#endif
 			} else {
 				maxHarmonicos = maxHarmonicosNetlist;
 			}
@@ -768,7 +764,6 @@ int main(void)
 
 			for(indiceHarmonicos=0;indiceHarmonicos<=maxHarmonicos;indiceHarmonicos++) {
 				elemento *fonte=getHarmonic(fontes[k],indiceHarmonicos);
-				int indiceFonte = fontes[k]->netlistIndex;
 				if (fonte==0) {
 #ifdef DEBUG
 					printf("Nao ha mais harmonicos para a fonte %s\n",fonte->nome);
@@ -828,11 +823,8 @@ int main(void)
 #ifdef DEBUG
 						printf("Sistema resolvido:\n");
 #endif
-						float fasor;
-						double tOff;
+						double fasor = 0;
 						for (i=1; i<=nv; i++) {
-//							for (j=1; j<=nv+1; j++) {
-
 								if (fonte->param2 == 0)
 									fasor = creal(Yn[i][nv+1]);
 								else {
@@ -844,15 +836,12 @@ int main(void)
 									}
 								}
 								Yt[i][nv+1] += fasor;
-								//Zerando Yn para deixa-lo pronto para a proxima analise
-//								Yn[i][nv+1] = 0;
 #ifdef DEBUG
 								if (Yn[i][nv+1]!=0)
 									printf("%+3.1f ",fasor);
 								else
 									printf(" ... ");
 #endif
-//							}
 #ifdef DEBUG
 							printf("\n");
 #endif
