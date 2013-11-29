@@ -67,7 +67,8 @@ SIN <nivel contínuo> <amplitude> <frequência (Hz)> <atraso*> <atenuação*> <ângul
 clock_t startm, stopm;
 #define START if ( (startm = clock()) == -1) {printf("Error calling clock");exit(1);}
 #define STOP if ( (stopm = clock()) == -1) {printf("Error calling clock");exit(1);}
-#define PRINTTIME printf( "%6.3f seconds used by the processor.\n", ((double)stopm-startm)/CLOCKS_PER_SEC);
+#define PRINTTIME printf("%6.3f seconds used by the processor.\n", ((double)stopm-startm)/CLOCKS_PER_SEC);
+#define LAP if ( (stopm = clock()) == -1) {printf("Error calling clock");exit(1);} printf("%6.3f seconds used by the processor.\n", ((double)stopm-startm)/CLOCKS_PER_SEC);
 
 #define MAX_LINHA 80
 #define MAX_STR_LEN 80
@@ -109,7 +110,7 @@ indiceIndutores=0,
 indiceTransformadores=0,
 repeatHarmonic = 0;
 
-unsigned maxHarmonicos=MAX_HARMONIC_LIMIT;
+double maxHarmonicos=MAX_HARMONIC_LIMIT;
 
 int
 i, j, k;
@@ -284,15 +285,15 @@ elemento* getHarmonic(elemento *fonte,int index) {
 				double a = (max-min)/(t2-t3);
 				double b = (min*t2 - max*t3)/(t2-t3);
 
-				ret->valor = 2/period * (1/w) * (max*sin(w*t2) - max*sin(w*t1))
-						   + 2/period *(1/w) * (min*sin(w*t4) - min*sin(w*t3));
+				ret->valor  = 2/period * (max/w) * (sin(w*t2) - sin(w*t1))
+						    + 2/period * (min/w) * (sin(w*t4) - sin(w*t3));
 
-				ret->param1 = 2/period * (1/w) * max * (cos(w*t1) - cos(w*t2))
-							+ 2/period * (1/w) * min * (cos(w*t3) - cos(w*t4));
+				ret->param1 = 2/period * (max/w) * (cos(w*t1) - cos(w*t2))
+							+ 2/period * (min/w) * (cos(w*t3) - cos(w*t4));
 
 				if (tRise != 0) {
-					ret->valor += 2/period * pow((1/w),2) * (w*max*sin(w*t1) + ( (max-min)/t1 )*cos(w*t1) - (max-min)/t1 );
-					ret->param1 += 2/period * pow((1/w),2) * (-1*w*max*cos(w*t1) + ((max-min)/t1)*sin(w*t1) + min*w );
+					ret->valor  += 2/period * pow((1/w),2) * (   w*max*sin(w*t1) + ( (max-min)/t1 )*cos(w*t1) - (max-min)/t1 );
+					ret->param1 += 2/period * pow((1/w),2) * (-1*w*max*cos(w*t1) + ( (max-min)/t1 )*sin(w*t1) + min*w );
 				}
 
 				if (tFall != 0) {
@@ -616,17 +617,16 @@ int main(void)
 #endif
 			}
 			else if (tipo == '.'){
-				//sscanf(p,"%d %d",tempoFinal,passo);
 				tempoFinal = atof(netlistParams[1]);
 				passo = atof(netlistParams[2]);
 				if (atoi(netlistParams[3])) {
 					maxHarmonicos = atoi(netlistParams[3]);
 				} else {
-					maxHarmonicos = 1/passo;
+					maxHarmonicos = (double) 1/(2*passo);
 					if (maxHarmonicos > MAX_HARMONIC_LIMIT)
 						maxHarmonicos = MAX_HARMONIC_LIMIT;
 				}
-				printf("Tempo de simulacao: %g\nPasso=%g\nNumero de harmonicos=%i\n",tempoFinal,passo,maxHarmonicos);
+				printf("Tempo de simulacao: %g\nPasso=%g\nNumero de harmonicos=%g\n",tempoFinal,passo,maxHarmonicos);
 			}
 			else {
 				printf("Elemento desconhecido: %s\n",txt);
@@ -643,6 +643,7 @@ int main(void)
 		}
 	}
 	fclose(arquivo);
+
 	/* Acrescenta variaveis de corrente acima dos nos, anotando no netlist */
 	nn=nv;
 	for (i=1; i<=ne; i++) {
@@ -674,6 +675,8 @@ int main(void)
 		transformadores[i][0]->x = transformadores[i][1]->x;
 		transformadores[i][0]->y = transformadores[i][2]->x;
 	}
+
+
 #ifdef DEBUG
 
 #ifdef _WIN32
@@ -717,7 +720,7 @@ int main(void)
 
 #endif
 	/* Zera sistema */
-
+	LAP;
 
 	//lista[i]
 	// Escrevendo header do arquivo
@@ -730,7 +733,7 @@ int main(void)
 	}
 	fprintf(outputFile,"\n");
 
-	t=0;
+	double t=0;
 #ifdef DEBUG
 	printf("Iniciando analise no tempo\n");
 #endif
@@ -741,9 +744,6 @@ int main(void)
 				Yt[i][j] = 0;
 //				Yn[i][j] = 0; // Iniciando primeiro valor da matrix parcial Yn
 
-
-		elemento *fonte;
-		int indiceFonte = 0;
 #ifdef DEBUG
 		printf("Iniciando varredura de fontes\n");
 #endif
@@ -751,13 +751,19 @@ int main(void)
 #ifdef DEBUG
 			printf("Iniciando varredura de harmonicos para a fonte %s, tipo %s\n",fontes[k]->nome,fontes[k]->tipo);
 #endif
+			double maxHarmonicos;
+			if (strcmp(fontes[k]->tipo,"PULSE") == 0) {
+				maxHarmonicos = fontes[k]->param6/(2*passo);
+			} else if (fontes[k]->param2 > 0) {
+				maxHarmonicos = 1/(2*passo*fontes[k]->param2);
+			}
 			for(indiceHarmonicos=0;indiceHarmonicos<=maxHarmonicos;indiceHarmonicos++) {
-				fonte=getHarmonic(fontes[k],indiceHarmonicos);
-				indiceFonte = fontes[k]->netlistIndex;
+				elemento *fonte=getHarmonic(fontes[k],indiceHarmonicos);
+				int indiceFonte = fontes[k]->netlistIndex;
 				if (fonte==0) {
-//#ifdef DEBUG
-					printf("Nao ha mais harmonicos para essa fonte\n");
-//#endif
+#ifdef DEBUG
+					printf("Nao ha mais harmonicos para a fonte %s\n",fonte->nome);
+#endif
 					break;
 				}else {
 #ifdef DEBUG
@@ -789,6 +795,7 @@ int main(void)
 						} else {
 #ifdef DEBUG
 							printf("Tipo da fonte nao identificado\n");
+							exit();
 #endif
 						}
 					}
@@ -804,9 +811,7 @@ int main(void)
 						printf("\n");
 					}
 #endif
-#if defined(_WIN32) && defined(DEBUG)
-					getch();
-#endif
+
 					/* Resolve o sistema */
 					// Se o sistema for singular para essa fonte, vamos ignorar sua contribuição na superposição.
 					if (resolversistema() == 0) {
@@ -823,10 +828,10 @@ int main(void)
 									fasor = creal(Yn[i][nv+1]);
 								else {
 									if (strcmp(fonte->tipo,"SIN") == 0){
-										fasor = cabs(Yn[i][nv+1])*sin(indiceHarmonicos*fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]));
+										fasor = cabs(Yn[i][nv+1])*sin(indiceHarmonicos*fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]) );
 									}else if (strcmp(fonte->tipo,"PULSE") == 0){
 										//fonte->param2 ja inclui o indice do harmonico
-										fasor = cabs(Yn[i][nv+1])*cos(fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]));
+										fasor = cabs(Yn[i][nv+1])*sin(fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]) );
 									}
 								}
 								Yt[i][nv+1] += fasor;
@@ -843,9 +848,6 @@ int main(void)
 							printf("\n");
 #endif
 						}
-#if defined(_WIN32) && defined(DEBUG)
-						getch();
-#endif
 					}
 
 					if (strcmp(fonte->tipo,"PULSE") ==0 && fonte->param2 >0) {
@@ -879,9 +881,6 @@ int main(void)
 							printf("\n");
 						}
 #endif
-#if defined(_WIN32) && defined(DEBUG)
-						getch();
-#endif
 						/* Resolve o sistema */
 						// Se o sistema for singular para essa fonte, vamos ignorar sua contribuição na superposição.
 						if (resolversistema() == 0) {
@@ -890,28 +889,17 @@ int main(void)
 							printf("Sistema resolvido:\n");
 #endif
 							float fasor;
-							double tOff;
 							for (i=1; i<=nv; i++) {
-//								for (j=1; j<=nv+1; j++) {
-
-									fasor = cabs(Yn[i][nv+1])*sin(fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]));
-
-									Yt[i][nv+1] += fasor;
-//									Yn[i][nv+1] = 0;
+								fasor = cabs(Yn[i][nv+1])*sin(fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]));
+								Yt[i][nv+1] += fasor;
 #ifdef DEBUG
-									if (Yn[i][nv+1]!=0)
-										printf("%+3.1f ",fasor);
-									else
-										printf(" ... ");
-#endif
-//								}
-#ifdef DEBUG
+								if (Yn[i][nv+1]!=0)
+									printf("%+3.1f ",fasor);
+								else
+									printf(" ... ");
 								printf("\n");
 #endif
 							}
-#if defined(_WIN32) && defined(DEBUG)
-							getch();
-#endif
 						}
 					}
 
@@ -938,14 +926,11 @@ int main(void)
 		fprintf(outputFile,"\n");
 
 #ifdef DEBUG
-		printf("Tempo atual: %f\n",t);
-		printf("Passo: %f\n",passo);
-		printf("Tempo Final: %f\n",tempoFinal);
+		printf("Tempo atual: %g\n",t);
+		printf("Passo: %g\n",passo);
+		printf("Tempo Final: %g\n",tempoFinal);
 #endif
-		t = t + passo;
-#if defined(_WIN32) && defined(DEBUG)
-		getch();
-#endif
+		t += passo;
 	}while(t<tempoFinal);
 
 	fclose(outputFile);
