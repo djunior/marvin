@@ -110,7 +110,7 @@ indiceIndutores=0,
 indiceTransformadores=0,
 repeatHarmonic = 0;
 
-double maxHarmonicos=MAX_HARMONIC_LIMIT;
+double maxHarmonicosNetlist=-1;
 
 int
 i, j, k;
@@ -314,8 +314,9 @@ elemento* getHarmonic(elemento *fonte,int index) {
 	return ret;
 }
 
-//Monta as estampas dos elementos definidos em nList com a fonte selecionada no ponteiro "fonte"
-//A saida e gravada na matrix y
+//Monta as estampas dos elementos definidos em nList com as fontes de tensao e corrente nulas
+//A saida e gravada na matrix y. O elemento fonte e utilizado para calcular os capacitores e indutores
+//O elemento fonte nao e adicionado na tabela por essa funcao
 void montarEstampas(double complex y[MAX_NOS+1][MAX_NOS+2],elemento nList[],elemento *fonte){
 	double complex g;
 	//Zerando a matrix de saida - Isso nao deve ser mais feito aqui, para melhorar a performance
@@ -620,13 +621,12 @@ int main(void)
 				tempoFinal = atof(netlistParams[1]);
 				passo = atof(netlistParams[2]);
 				if (atoi(netlistParams[3])) {
-					maxHarmonicos = atoi(netlistParams[3]);
+					maxHarmonicosNetlist = atoi(netlistParams[3]);
 				} else {
-					maxHarmonicos = (double) 1/(2*passo);
-					if (maxHarmonicos > MAX_HARMONIC_LIMIT)
-						maxHarmonicos = MAX_HARMONIC_LIMIT;
+					//O harmonico e configurado para cada fonte
+					maxHarmonicosNetlist = -1;
 				}
-				printf("Tempo de simulacao: %g\nPasso=%g\nNumero de harmonicos=%g\n",tempoFinal,passo,maxHarmonicos);
+				printf("Tempo de simulacao: %g\nPasso=%g\nNumero de harmonicos=%g\n",tempoFinal,passo,maxHarmonicosNetlist);
 			}
 			else {
 				printf("Elemento desconhecido: %s\n",txt);
@@ -751,12 +751,21 @@ int main(void)
 #ifdef DEBUG
 			printf("Iniciando varredura de harmonicos para a fonte %s, tipo %s\n",fontes[k]->nome,fontes[k]->tipo);
 #endif
+
 			double maxHarmonicos;
-			if (strcmp(fontes[k]->tipo,"PULSE") == 0) {
-				maxHarmonicos = fontes[k]->param6/(2*passo);
-			} else if (fontes[k]->param2 > 0) {
-				maxHarmonicos = 1/(2*passo*fontes[k]->param2);
+			if (maxHarmonicosNetlist == -1) {
+				if (strcmp(fontes[k]->tipo,"PULSE") == 0) {
+					maxHarmonicos = fontes[k]->param6/(2*passo);
+				} else if (strcmp(fontes[k]->tipo,"DC") == 0) {
+					maxHarmonicos = 1;
+				} else {
+					maxHarmonicos = 1/(2*passo*fontes[k]->param2);
+				}
+			} else {
+				maxHarmonicos = maxHarmonicosNetlist;
 			}
+
+
 			for(indiceHarmonicos=0;indiceHarmonicos<=maxHarmonicos;indiceHarmonicos++) {
 				elemento *fonte=getHarmonic(fontes[k],indiceHarmonicos);
 				int indiceFonte = fontes[k]->netlistIndex;
@@ -831,7 +840,7 @@ int main(void)
 										fasor = cabs(Yn[i][nv+1])*sin(indiceHarmonicos*fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]) );
 									}else if (strcmp(fonte->tipo,"PULSE") == 0){
 										//fonte->param2 ja inclui o indice do harmonico
-										fasor = cabs(Yn[i][nv+1])*sin(fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]) );
+										fasor = cabs(Yn[i][nv+1])*cos(fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]) );
 									}
 								}
 								Yt[i][nv+1] += fasor;
@@ -851,9 +860,6 @@ int main(void)
 					}
 
 					if (strcmp(fonte->tipo,"PULSE") ==0 && fonte->param2 >0) {
-						for (i=1; i<=nv; i++)
-							for (j=1; j<=nv+1; j++)
-								Yn[i][j] = 0;
 
 						montarEstampas(Yn,netlist,fonte);
 
