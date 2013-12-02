@@ -47,7 +47,7 @@ SIN <nivel contínuo> <amplitude> <frequência (Hz)> <atraso*> <atenuação*> <ângul
 
 // Debug deve ser definido durante a compilacao
 //#define DEBUG true
-#define versao "1.1 - 22/11/2013"
+#define versao "1.1 - 28/11/2013"
 #include <stdio.h>
 
 //Include especifico para Windows
@@ -305,12 +305,11 @@ elemento* getHarmonic(elemento *fonte,int index) {
 				}
 
 				if (tFall != 0) {
-					ret->valor += 2/period * pow((1/w),2) * ( w*(a*t3 +b)*sin(w*t3) - w*(a*t2 +b)*sin(w*t2) - a*cos(w*t2) + a*cos(w*t3) );
-					ret->param1 += 2/period * pow((1/w),2) * (w*(a*t2+b)*cos(w*t2) - w*(a*t3 +b)*cos(w*t3) + a*sin(w*t3) - a*sin(w*t2) );
+					ret->valor  += 2/period * pow((1/w),2) * ( w*(a*t3 +b)*sin(w*t3) - w*(a*t2 +b)*sin(w*t2) - a*cos(w*t2) + a*cos(w*t3) );
+					ret->param1 += 2/period * pow((1/w),2) * ( w*(a*t2 +b)*cos(w*t2) - w*(a*t3 +b)*cos(w*t3) + a*sin(w*t3) - a*sin(w*t2) );
 				}
 
 			}
-
 			ret->param2 = index/ret->param6;
 			return ret;
 		}
@@ -754,14 +753,16 @@ int main(void)
 				} else {
 					maxHarmonicos = 1/(2*passo*fontes[k]->param2);
 				}
+
+				if (maxHarmonicos > MAX_HARMONIC_LIMIT)
+					maxHarmonicos=MAX_HARMONIC_LIMIT;
+
 #ifdef DEBUG
 				printf("Calculando fonte %s utilizando %g harmonicos\n",fontes[k]->nome,maxHarmonicos);
 #endif
 			} else {
 				maxHarmonicos = maxHarmonicosNetlist;
 			}
-
-
 			for(indiceHarmonicos=0;indiceHarmonicos<=maxHarmonicos;indiceHarmonicos++) {
 				elemento *fonte=getHarmonic(fontes[k],indiceHarmonicos);
 				if (fonte==0) {
@@ -795,7 +796,7 @@ int main(void)
 						} else if(strcmp(fonte->tipo,"SIN") == 0) {
 							Yn[fonte->x][nv+1] -= fonte->param1*cos(fonte->param6*M_PI/180) + I*fonte->param1*sin(fonte->param6*M_PI/180);
 						} else if (strcmp(fonte->tipo,"PULSE") == 0) {
-							Yn[fonte->x][nv+1] -= fonte->valor;
+							Yn[fonte->x][nv+1] -= (fonte->valor -I*fonte->param1 );
 						} else {
 #ifdef DEBUG
 							printf("Tipo da fonte nao identificado\n");
@@ -847,62 +848,10 @@ int main(void)
 #endif
 						}
 					}
-
-					if (strcmp(fonte->tipo,"PULSE") ==0 && fonte->param2 >0) {
-
-						montarEstampas(Yn,netlist,fonte);
-
-						if (fonte->nome[0] =='I') {
-							g=fonte->param1;
-							Yn[fonte->a][nv+1]-=g;
-							Yn[fonte->b][nv+1]+=g;
-						}
-						else if (fonte->nome[0] == 'V') {
-							Yn[fonte->a][fonte->x] += 1;
-							Yn[fonte->b][fonte->x] -= 1;
-							Yn[fonte->x][fonte->a] -= 1;
-							Yn[fonte->x][fonte->b] += 1;
-							Yn[fonte->x][nv+1] -= fonte->param1;
-						}
-#ifdef DEBUG
-						/* Opcional: Mostra o sistema apos a montagem da estampa */
-						//	printf("Sistema apos a estampa de %s\n",netlist[i].nome);
-						for (i=1; i<=nv; i++) {
-							for (j=1; j<=nv+1; j++)
-								if (cabs(Yn[i][j])!=0)
-									printf("%+3.1f + j%+3.1f ",creal(Yn[i][j]),cimag(Yn[i][j]));
-								else
-									printf(" ........... ");
-							printf("\n");
-						}
-#endif
-						/* Resolve o sistema */
-						// Se o sistema for singular para essa fonte, vamos ignorar sua contribuição na superposição.
-						if (resolversistema() == 0) {
-							/* Opcional: Mostra o sistema resolvido */
-#ifdef DEBUG
-							printf("Sistema resolvido:\n");
-#endif
-							float fasor;
-							for (i=1; i<=nv; i++) {
-								fasor = cabs(Yn[i][nv+1])*sin(fonte->param2*2*M_PI*t + carg(Yn[i][nv+1]));
-								Yt[i][nv+1] += fasor;
-#ifdef DEBUG
-								if (Yn[i][nv+1]!=0)
-									printf("%+3.1f ",fasor);
-								else
-									printf(" ... ");
-								printf("\n");
-#endif
-							}
-						}
-					}
-
 					free(fonte);
 				}
 			}
 		}
-
 		fprintf(outputFile,"%g",t);
 
 		/* Mostra solucao */
